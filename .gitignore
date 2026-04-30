@@ -37,3 +37,6 @@ next-env.d.ts
 
 # claude code (per-machine local prefs)
 .claude/
+
+# auto-generated (regenerate via `npm run api:types`)
+src/lib/api-types.ts
