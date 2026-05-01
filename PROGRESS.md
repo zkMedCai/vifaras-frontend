@@ -203,3 +203,42 @@ Final state Sub-task 5:
 - Backend offline scenario non testato automaticamente in [10.0.3]; verrà esercitato manualmente quando serve
 
 **Next**: [10.0.4] landing minima — `src/app/page.tsx` da default Next a Vifaras placeholder. Hero + tagline + 3 step "How it works" + CTA `/signup`+`/login` (404 expected fino a [10.0.5/6]). Stimato 1-2 ore.
+
+---
+
+## [10.0.4] Landing page minima
+
+**Date**: 2026-05-01
+
+**Done**:
+
+- Sostituito `src/app/page.tsx` da scaffold Next default a Vifaras placeholder (-2.6 KB nel response payload, 13.2 → 10.6 KB)
+- Rimossi tutti gli asset Vercel/Next CTAs, icons, link esterni — niente immagini, niente SVG inline
+- Componenti puri Tailwind 3 base, container `max-w-3xl mx-auto px-6 py-24`
+- Tipografia Geist (locale, già setup in [10.0.3])
+
+**Struttura pagina**:
+
+1. **Hero** centrato: `<h1>Vifaras</h1>` (text-5xl font-bold), tagline principale + sub-tagline (slate-600/500)
+2. **2 CTA buttons** affiancati: `<Link href="/signup">` (slate-900 pieno) + `<Link href="/login">` (border outline). Next-Link, no full-page reload
+3. **Sezione "How it works"** (`mt-32`): 3 step numerati (01/02/03 in slate-400 light) + titolo + descrizione 1 riga ciascuno
+4. **Footer minimale**: border-top, `Built in Italy · Private beta launching Spring 2026`
+
+**Verifiche**:
+
+- `npm run lint` ✓ (apostrofo non escapato `agent's` OK — `react/no-unescaped-entities` disabilitato in [10.0.2] config)
+- `npx tsc --noEmit` ✓
+- `npm run format:check` ✓
+- `curl GET /` → HTTP 200, body include tutti i marker (Vifaras, taglines, 3 step, footer, hrefs `/signup`+`/login`)
+- `curl GET /signup` → HTTP 404 ✓ (atteso, route in [10.0.5])
+- `curl GET /login` → HTTP 404 ✓ (atteso, route in [10.0.6])
+- Banner verde [10.0.3] continua a renderizzare in alto (root layout invariato) — visual confirmato
+
+**Decisioni**:
+
+- Niente sezioni FAQ/security/pricing — placeholder dev, marketing-grade differito a landing pubblica futura
+- Niente animations on scroll, niente dark mode toggle — V0.5+
+- Apostrofo letterale `agent's` invece di `&apos;` — più leggibile, ESLint config già permissivo per italiano + apostrofi
+- `<Link>` di Next invece di `<a>` — client-side nav quando le route esisteranno
+
+**Next**: [10.0.5] signup WebAuthn flow — primo flusso auth real, `@simplewebauthn/browser` integration. Stimato 3-5 ore (sub-task più complesso di FASE 10.0).
