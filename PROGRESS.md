@@ -242,3 +242,80 @@ Final state Sub-task 5:
 - `<Link>` di Next invece di `<a>` — client-side nav quando le route esisteranno
 
 **Next**: [10.0.5] signup WebAuthn flow — primo flusso auth real, `@simplewebauthn/browser` integration. Stimato 3-5 ore (sub-task più complesso di FASE 10.0).
+
+---
+
+## [10.0.5] signup webauthn flow
+
+**Date**: 2026-05-01
+
+**Done**:
+
+### Auth store (`src/lib/auth-store.ts`)
+
+- Zustand con `persist` middleware (localStorage key `vifaras-auth`)
+- `User` interface: `id` da `TokenResponse.user_id` + `email` da form (preservato — backend non ritorna email, no `/api/users/me`)
+- Methods: `setAuth`, `logout`
+
+### API client extension (`src/lib/api-client.ts`)
+
+- Bearer token injection automatico via `useAuthStore.getState()` dentro `request()` (snapshot pattern, no caching)
+- Auth methods typed: `signupBegin`, `signupComplete`, `loginBegin`, `loginComplete`, `refresh`
+- Type helper `JsonRequest<P, M>` simmetrico a `JsonResponse<P, M>` — risparmia 5 catene `paths[X]['post']['requestBody']['content']['application/json']`
+- Plain object pattern per merging headers (coerente col codice esistente, no Headers API switch)
+
+### WebAuthn helper (`src/lib/webauthn.ts`)
+
+- `registerNewPasskey(email)` + `loginWithPasskey(email)` (anticipato per [10.0.6] — pattern speculare, 90% codice condiviso)
+- Type cast confinato `as unknown as XYZ` come ponte tra opaque API types (`Record<string, unknown>`) e tipi `@simplewebauthn`
+- **Calibrazione vs brief**: import types da `@simplewebauthn/types` (NOT `/browser` come da brief originale) — package consolidation v11; `/browser` esporta solo funzioni
+- `'use client'` directive come marker protettivo contro import accidentale da server component
+
+### SignupForm (`src/components/auth/signup-form.tsx`)
+
+- `FormState` discriminated union (`idle` / `loading` / `error`) — narrowing automatico, niente combo invalide tipo `isLoading=true && error!=null`
+- `getErrorMessage()` inline (estrazione condivisa rinviata a [10.0.6] post-LoginForm — YAGNI: 401/404 sono login-only, 409 è signup-only, mismatch sub-cases)
+- Error mapping: `ApiError` (409, 422, 429, 5xx) + WebAuthn (`NotAllowedError`, `InvalidStateError`, `NotSupportedError`) + network (`Failed to fetch`)
+
+### Routes
+
+- `src/app/(auth)/signup/page.tsx` — server component wrapper, hero + form + link a `/login`
+- `src/app/(app)/dashboard/page.tsx` — client component con auth guard via `useEffect` + `router.push('/login')` se `!accessToken`
+- Selector pattern Zustand consistente (`useAuthStore((s) => s.field)`) — sub solo a slice, non full state
+
+### Cross-repo bug fix (backend)
+
+Durante e2e test emerso: backend `WEBAUTHN_EXPECTED_ORIGIN` puntava a `http://localhost:8000` (self-reference) invece di `http://localhost:3000` (frontend). Browser invia correttamente `clientDataJSON.origin = http://localhost:3000` per spec WebAuthn (anti-phishing, non falsificabile dal client) — backend rigettava ogni `register/complete` con 401 `invalid_credential: "Unexpected client data origin"`.
+
+Backend fix: 1 linea config `expected_origin`, 5 min. Restart uvicorn → e2e verde subito dopo.
+
+Pattern catturato: setup split-deploy (backend `:8000` ↔ frontend `:3000`) richiede `expected_origin` puntato al **frontend** URL, non al backend stesso. Per prod sarà env var con dominio frontend pubblico.
+
+### IDEAS_BACKLOG additions
+
+- **Backend `/api/users/me` endpoint (V0.5+)** — trigger quando frontend avrà bisogno di tier/mandate state oltre email + id. Per V0 dashboard placeholder, email da form basta.
+
+**End-to-end test (verificato dal founder in browser)**:
+
+1. `/signup` form renderizza ✓
+2. POST `/api/auth/register/begin` → 200 con `{options, challenge_token}` ✓
+3. Windows Hello dialog → autenticazione utente ✓
+4. POST `/api/auth/register/complete` → 200 con `TokenResponse` (post backend fix) ✓
+5. Redirect `/dashboard`, `Hello {email}` displayed ✓
+6. Refresh page → auth persiste (Zustand localStorage) ✓
+7. Logout → state cleared, redirect `/` ✓
+
+**Decisioni minor documentate**:
+
+- Zustand selector pattern (`useAuthStore((s) => s.field)`) come convenzione per tutti i consumer
+- Email da form preservata in store, non viene da backend `TokenResponse`
+- `loginWithPasskey` aggiunto in [10.0.5.3] (anticipa [10.0.6])
+- `getErrorMessage()` inline, refactor in `auth-errors.ts` differito a [10.0.6] quando esisterà secondo use site
+
+**Calibrazioni aggiuntive vs brief**:
+
+- `JsonRequest<P, M>` helper (non solo `JsonResponse`) — DRY su 5 type extractions
+- `disabled:opacity-50` anche su `<input>` oltre che `<button>` — visual feedback loading-locked
+- Selector pattern Zustand su dashboard invece di destructure pieno — coerenza con signup-form, idiomatic
+
+**Next**: [10.0.6] login WebAuthn flow — riusa `loginWithPasskey` helper già in place, estrai `auth-errors.ts` shared con sub-cases per-flow. Stimato 2-3 ore (più semplice di [10.0.5] grazie a pattern consolidati).

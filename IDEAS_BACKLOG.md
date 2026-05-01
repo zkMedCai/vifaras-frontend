@@ -49,6 +49,22 @@ Parking lot di scope creep, decisioni rinviate, e blocker schedulati.
 
 ## V0.5+ Enhancements
 
+### Backend `/api/users/me` endpoint
+
+**Trigger**: quando il frontend avrà bisogno di fetch user state oltre email + id (es. tier corrente, mandate status, daily caps remaining).
+
+**Background**: V0 dashboard mostra "Hello {email}" usando email salvata da form signup/login. `TokenResponse` backend ritorna solo `user_id`, nessun endpoint per fetch profile. Verificato in [10.0.5.0] discovery — la lista path OpenAPI non include `/api/users/me` né analoghi.
+
+**Effort backend**: ~30 min, endpoint protected che ritorna `User` object (id, email, tier, ecc.).
+
+**Effort frontend**:
+
+- Aggiungi `api.getMe()` method in `src/lib/api-client.ts`
+- Use in `dashboard/page.tsx` mount → refresh user state al login
+- Eventualmente espandi `User` interface in `src/lib/auth-store.ts` con campi nuovi (tier, ecc.)
+
+**NB**: nel frattempo V0 funziona perché email è già known dal form input. Quando arriverà necessità di mostrare tier corrente o daily caps, scatta il trigger.
+
 ### Next major upgrade (14 → 15 o 16)
 
 **Trigger condizionale**:
