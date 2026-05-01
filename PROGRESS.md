@@ -319,3 +319,57 @@ Pattern catturato: setup split-deploy (backend `:8000` ↔ frontend `:3000`) ric
 - Selector pattern Zustand su dashboard invece di destructure pieno — coerenza con signup-form, idiomatic
 
 **Next**: [10.0.6] login WebAuthn flow — riusa `loginWithPasskey` helper già in place, estrai `auth-errors.ts` shared con sub-cases per-flow. Stimato 2-3 ore (più semplice di [10.0.5] grazie a pattern consolidati).
+
+---
+
+## [10.0.6] login webauthn flow
+
+**Date**: 2026-05-01
+
+**Done**:
+
+### Discovery preliminare
+
+Probe `POST /api/auth/login/begin` con email non registrata → **404** code `user_not_found`. Email malformata → **422** Pydantic validation. Brief già calibrato correttamente, niente correzioni a `getLoginApiErrorMessage`.
+
+### `auth-errors.ts` shared (composer pattern)
+
+- **`getWebAuthnErrorMessage(err)`** shared: `NotAllowedError`, `NotSupportedError`, network (`Failed to fetch`). Ritorna `string | null` (null = "non riconosciuto, prova altro path")
+- **`getSignupApiErrorMessage(err)`** flow-specific: 409 (duplicate), 422 (format), 429 (rate limit), 5xx (backend down)
+- **`getLoginApiErrorMessage(err)`** flow-specific: 401 (auth failed), 404 (user not found), 422 (format), 429, 5xx
+- **Composer `getSignupErrorMessage`**: prova WebAuthn shared → ApiError signup → `InvalidStateError` (signup-only: passkey già su questo authenticator) → fallback
+- **Composer `getLoginErrorMessage`**: prova WebAuthn shared → ApiError login → fallback
+
+### SignupForm refactor
+
+- Sostituito inline `getErrorMessage()` (35 righe) con `getSignupErrorMessage` import (1 riga)
+- Rimosso import `ApiError` (era usato solo dentro la funzione inline)
+- File `signup-form.tsx`: 107 → 72 righe. Semantica preservata 1:1 (stesse 9 case di prima)
+
+### LoginForm component (`src/components/auth/login-form.tsx`)
+
+- Mirror image di SignupForm post-refactor — 90% identico
+- 3 differenze flow-specific: `loginWithPasskey` (vs register), `getLoginErrorMessage` (vs signup), button label "Sign in with passkey" + loading "Authenticating..."
+- Stesso `FormState` discriminated union, stesso layout/styling
+
+### Route `src/app/(auth)/login/page.tsx`
+
+- Server component wrapper, mirror della signup page
+- CTA inversa: "Don't have an account? Sign up" → `/signup`
+- `Don&apos;t` (escaped) per defensive parsing — funzionalmente identico
+
+### End-to-end test (verificato dal founder in browser)
+
+- Login con email già registrata → success → redirect `/dashboard` ✓
+- Login con email non registrata → "No account found for this email. Try signing up." (404 mapping) ✓
+- Cancel Windows Hello dialog → "Passkey was canceled or timed out." (NotAllowedError shared) ✓
+- Refresh post-login persiste auth (Zustand localStorage) ✓
+- Cycle completo signup → logout → login → dashboard funzionante ✓
+
+**Decisioni**:
+
+- Composer naming: `get{Signup,Login}ErrorMessage` come default — naming consistente, parallelo a `get{Signup,Login}ApiErrorMessage`
+- `InvalidStateError` mantenuto signup-specific dentro composer — semantica diversa tra signup (failure: passkey già esiste) e login (potenziale success path implicito)
+- Estrazione fatta DOPO esistenza secondo use site (LoginForm) — YAGNI rispettato, design API condiviso basato su 2 callers reali, non 1 hypothetical
+
+**Next**: [10.0.7] dashboard polish + auth guard hardening — placeholder già 80% in place da [10.0.5.6]. Decisione open: rimane minimal (Hello + email + logout) o aggiungere skeleton sezioni (intent list, mandate status placeholder, ecc.) anticipando [10.1+]. Stimato 1-2 ore se minimal, 2-3 ore se skeleton esteso.

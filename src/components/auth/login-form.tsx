@@ -2,13 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getSignupErrorMessage } from '@/lib/auth-errors'
+import { getLoginErrorMessage } from '@/lib/auth-errors'
 import { useAuthStore } from '@/lib/auth-store'
-import { registerNewPasskey } from '@/lib/webauthn'
+import { loginWithPasskey } from '@/lib/webauthn'
 
 type FormState = { status: 'idle' } | { status: 'loading' } | { status: 'error'; message: string }
 
-export function SignupForm() {
+export function LoginForm() {
   const router = useRouter()
   const setAuth = useAuthStore((s) => s.setAuth)
 
@@ -20,7 +20,7 @@ export function SignupForm() {
     setState({ status: 'loading' })
 
     try {
-      const result = await registerNewPasskey(email)
+      const result = await loginWithPasskey(email)
       setAuth({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
@@ -28,7 +28,7 @@ export function SignupForm() {
       })
       router.push('/dashboard')
     } catch (err) {
-      setState({ status: 'error', message: getSignupErrorMessage(err) })
+      setState({ status: 'error', message: getLoginErrorMessage(err) })
     }
   }
 
@@ -61,7 +61,7 @@ export function SignupForm() {
         disabled={isLoading || !email}
         className="w-full rounded-md bg-slate-900 px-6 py-3 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
       >
-        {isLoading ? 'Creating passkey...' : 'Create passkey'}
+        {isLoading ? 'Authenticating...' : 'Sign in with passkey'}
       </button>
 
       <p className="text-xs text-slate-500">
