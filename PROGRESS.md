@@ -373,3 +373,99 @@ Probe `POST /api/auth/login/begin` con email non registrata → **404** code `us
 - Estrazione fatta DOPO esistenza secondo use site (LoginForm) — YAGNI rispettato, design API condiviso basato su 2 callers reali, non 1 hypothetical
 
 **Next**: [10.0.7] dashboard polish + auth guard hardening — placeholder già 80% in place da [10.0.5.6]. Decisione open: rimane minimal (Hello + email + logout) o aggiungere skeleton sezioni (intent list, mandate status placeholder, ecc.) anticipando [10.1+]. Stimato 1-2 ore se minimal, 2-3 ore se skeleton esteso.
+
+---
+
+## [10.0.7] dashboard polish + auth guard hardening (minimal close)
+
+**Date**: 2026-05-01
+
+**Done**:
+
+- **Hydration mismatch protection** in `src/app/(app)/dashboard/page.tsx` via combo `useAuthStore.persist.hasHydrated()` + `useAuthStore.persist.onFinishHydration()`
+- Pattern: `useState(false)` iniziale → `useEffect` post-mount setta a `true` se già hydrated, altrimenti subscribe a `onFinishHydration` callback. Funziona sia con localStorage (sync) che con future IndexedDB (async)
+- Render guard `!hydrated || !accessToken || !user` previene flash di `null`/`undefined` durante rehydrate
+- Auth guard redirect `useEffect` aspetta `hydrated` prima di firing `router.push('/login')` — niente redirect prematuro durante boot
+
+**Calibrazione vs brief**:
+
+Founder proponeva 2 alternative:
+- (A) `useState + useEffect` simple
+- (B) `hasHydrated()` direct call in render
+
+Implementata terza via: combo (A) scaffolding + (B) Zustand official API. Motivo: chiamata diretta `hasHydrated()` in render è SSR-unsafe (server ritorna false, client ritorna true → React hydration mismatch warning). useState scaffolding garantisce render consistente SSR/CSR. Inside useEffect uso `hasHydrated()` + `onFinishHydration()` per semantica accurate con qualsiasi storage backend.
+
+7 righe vs 3 righe versione minimal — defensive ma corretto.
+
+**Skipped (deferred to V0.5+)**:
+
+- Skeleton loading states (no design direction yet — quando arriverà brand identity, framework loading + skeleton coordinati)
+- Placeholder sezioni intent/mandate/deals (premature — design vincolato a shape API che arriverà in [10.1+] FASE intent flow)
+
+**Verifiche**:
+
+- `npm run lint` ✓
+- `npx tsc --noEmit` ✓
+- `npm run format:check` ✓
+- `curl GET /dashboard` → HTTP 200 (server-rendered come null per unauth, idratato dopo redirect a /login se no token)
+
+---
+
+## FASE 10.0 — CHIUSA ✅
+
+**7 sub-task chiuse** (2026-04-30 → 2026-05-01). Frontend foundation funzionalmente completa per V0 alpha.
+
+### Capabilities consolidate
+
+- **Stack lock**: Next 14.2.35 + React 18 + TypeScript 5 + Tailwind 3.4.1 + Node 20 LTS + Zustand 4.5.7 + TanStack Query 5 + SimpleWebAuthn 11
+- **Pipeline OpenAPI → TypeScript types** end-to-end (`npm run api:types` → `src/lib/api-types.ts`, 41 paths typed)
+- **Health banner real-time** backend connectivity con polling 30s, 3 stati (healthy/degraded/unhealthy)
+- **Landing page placeholder** Vifaras (Hero + How it works + footer)
+- **Signup WebAuthn flow** end-to-end: form → challenge → Windows Hello → JWT → redirect dashboard
+- **Login WebAuthn flow** speculare: form → challenge → Windows Hello con credenziali esistenti → JWT → redirect
+- **Auth state persistito** via Zustand localStorage (`vifaras-auth` key)
+- **Auth guard** con hydration mismatch protection (no flash, no race condition redirect)
+- **Error mapping centralizzato** in `auth-errors.ts` composer pattern (shared WebAuthn + flow-specific API errors)
+
+### Architettura file finale
+
+```
+src/
+├── app/
+│   ├── (app)/dashboard/page.tsx       # protected, auth-guarded
+│   ├── (auth)/login/page.tsx          # public route
+│   ├── (auth)/signup/page.tsx         # public route
+│   ├── layout.tsx                     # root + Providers + HealthBanner
+│   ├── page.tsx                       # landing
+│   └── providers.tsx                  # QueryClient
+├── components/
+│   ├── auth/login-form.tsx
+│   ├── auth/signup-form.tsx
+│   └── shared/health-banner.tsx
+└── lib/
+    ├── api-client.ts                  # fetch wrapper + Bearer auto + auth methods
+    ├── api-types.ts                   # auto-gen, gitignored
+    ├── auth-errors.ts                 # composer pattern
+    ├── auth-store.ts                  # Zustand persist
+    ├── utils.ts                       # cn helper
+    └── webauthn.ts                    # registerNewPasskey + loginWithPasskey
+```
+
+### Cross-repo coordinations risolte
+
+- **[7.0.1] WebAuthn origin fix backend** (`localhost:8000` → `localhost:3000`) — bug discovery durante e2e signup test, pattern split-deploy `expected_origin = frontend_url` documentato
+- **OpenAPI live come fonte di verità** — Discovery [10.0.5.0] disambiguato 4 deviazioni vs brief mnemonico
+
+### IDEAS_BACKLOG additions
+
+- Pre-V1 launch security review (7 CVE catalogued)
+- Next major upgrade 14 → 15/16 (V0.5+ trigger condizionale)
+- Design system selection (V0.5+ post brand direction)
+- `@simplewebauthn/types` deprecation (V0.5+ verifica `/browser@12` consolidation)
+- Backend `/api/users/me` endpoint (V0.5+ trigger fetch user state oltre email + id)
+
+### Next options
+
+- **FASE 10.1+** intent flow, mandate config, deal signing — completare experience consumer V0
+- **FASE 7.1-7.4 backend**: rate limiting deep, observability, cost monitoring, pre-launch checklist
+- **Landing pubblica + dominio**: deploy Vercel + DNS + waitlist alpha
