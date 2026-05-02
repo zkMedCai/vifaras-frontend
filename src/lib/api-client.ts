@@ -75,6 +75,11 @@ export type BeginResponse = JsonResponse<'/api/auth/register/begin', 'post'>
 export type TokenResponse = JsonResponse<'/api/auth/register/complete', 'post'>
 export type RefreshResponse = JsonResponse<'/api/auth/refresh', 'post'>
 
+export type AgentsMineResponse = JsonResponse<'/api/agents/mine', 'get'>
+
+export type MandateDraftRequest = JsonRequest<'/api/mandates/draft', 'post'>
+export type MandateDraftResponse = JsonResponse<'/api/mandates/draft', 'post'>
+
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
 
@@ -100,6 +105,14 @@ export const api = {
     }),
   refresh: (body: RefreshRequest) =>
     request<RefreshResponse>('/api/auth/refresh', {
+      method: 'POST',
+      body,
+    }),
+
+  agentsMine: () => request<AgentsMineResponse>('/api/agents/mine'),
+
+  createMandateDraft: (body: MandateDraftRequest) =>
+    request<MandateDraftResponse>('/api/mandates/draft', {
       method: 'POST',
       body,
     }),
