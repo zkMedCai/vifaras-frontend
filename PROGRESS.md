@@ -578,3 +578,36 @@ Pattern: smoke verify reale cattura bug latenti che lint+tsc+code review non ved
 ### Next
 
 [10.1.2] Intent CRUD UI — primo flow Tier 2 user-facing (create/list/edit/delete intent + agent inizia matching). Stima 8-12h.
+
+---
+
+### Follow-up [post-S3 closure 2026-05-02 → 2026-05-03 late-night]
+
+**Backend test count investigation post-smoke-verify**
+
+Smoke verify [10.1.1.7.6] cleanup ha rivelato 2 pre-existing test infra bugs distinti.
+
+**Bug 1: Settings cache + dev DB pollution** (RESOLVED via cleanup)
+
+- `pydantic-settings` cache configurazione module-import time
+- testcontainers fixture env override `POSTGRES_HOST` IGNORATO post-import
+- Tutti backend test hittano dev DB, NON testcontainer
+- Smoke verify residue su dev DB → `test_submit_with_invalid_signature_fails` global query failure (no `user_id` filter)
+- V0 mitigation: SQL cleanup dev DB residue (DELETE smoke verify mandate, agent → pending_mandate, user → tier=1) → test passes restored
+
+**Bug 2: Timezone boundary in `test_mandate_verifier`** (TRANSIENT, V0.5+ documented)
+
+- 4 test fail solo durante CET/CEST UTC offset window (local midnight → UTC midnight gap)
+- Mixing `datetime.utcnow()` (verifier service) vs `date.today()` (test assertion)
+- Tests interessati: `test_daily_volume_cap_exceeded_raises`, `test_deals_count_cap_per_day_exceeded`, `test_counters_reset_on_new_day`, `test_counters_not_reset_same_day`
+- Transient: passano durante daytime quando UTC date == local date
+- Già coperto da pre-existing entry "TZ-naive datetime audit (V0.5+ pre-launch)" da FASE 7.4 IDEAS_BACKLOG (backend repo); manifestazione concreta documentata qui
+
+V0.5+ pre-launch action plans documented in IDEAS_BACKLOG (frontend repo):
+
+- Backend test infra Settings cache vs .env override
+- Backend test_mandate_verifier timezone boundary bugs
+
+**Pattern preservato**: niente regression S3, smoke verify successful end-to-end, history granular audit-friendly. Tag `v0-frontend-mandate-creation` semanticamente corretto e immutable. Backend test count `502` confermato outside timezone boundary window (Bug 2 transient non blocking, surfaces solo late-night CEST).
+
+**FASE 10.1.1 + follow-up audit chiuso definitive.**

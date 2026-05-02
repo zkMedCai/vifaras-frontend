@@ -212,3 +212,68 @@ V0 acceptable per founder-solo dev velocity. Pre-launch alpha esterno richiede a
 - Sub-task del deploy preparation (Vercel / Fly.io / equivalent)
 
 **Effort**: 30 min (env var read + optionsJSON pass + documentation).
+
+### Backend test infra Settings cache vs .env override (V0.5+ pre-launch CI)
+
+**Trigger**: V0.5+ pre-launch CI setup OR scope feature crescente con DB-mutating tests.
+
+**Background**: V0 [10.1.1.7.6 smoke verify follow-up] discovery rivelato che `pydantic-settings` cache configurazione al module-import time. Backend `testcontainers` fixture imposta `os.environ["POSTGRES_HOST"]` post-container-start, ma `Settings` cache non si rigenera. Tutti backend test hittano dev DB (`POSTGRES_HOST=localhost` da `.env`), non il testcontainer.
+
+Verification: con override `POSTGRES_HOST=nonexistent POSTGRES_PORT=99999` esplicito al pytest invocation, errore `invalid port number: 99999` confermando che fixture env override viene IGNORATO.
+
+V0 acceptable workaround:
+
+- Per-test transaction rollback funziona normalmente (qualunque connection)
+- Most test query con `user_id` filter (niente global pollution detection)
+- Founder-solo dev, niente CI parallel, dev DB normalmente clean
+
+V0 risk noto:
+
+- Smoke verify residue su dev DB → test con query globali (no `user_id` filter) failures
+- Sample: `test_submit_with_invalid_signature_fails` ha `select(Mandate)` global, polluted da smoke verify [10.1.1.7.6]
+- Mitigazione manuale: cleanup dev DB post-smoke-verify
+
+**Action V0.5+ pre-launch CI**:
+
+- `pytest-env` package per env override pre-import (vs post-import via fixture)
+- O alternative: `Settings` cache invalidation pattern via dependency_override pre-test
+- O alternative: separate `.env.test` con `POSTGRES_HOST=test-container` e auto-loading via `pytest-dotenv`
+- Test audit: convert all global queries (no `user_id` filter) a user-scoped per niente pollution risk
+- CI integration con Postgres testcontainer + env vars correctly propagated
+
+**Effort**: 2-3 ore (env override fix + test audit global queries + CI wire).
+
+### Backend test_mandate_verifier timezone boundary bugs (V0.5+ pre-launch)
+
+**Trigger**: V0.5+ pre-launch CI o quando bug surfaces frequently.
+
+**Background**: V0 [10.1.1.7.8 follow-up smoke verify] discovery rivelato 4 test in `test_mandate_verifier.py` che falliscono solo durante timezone boundary window (local time post-midnight ma UTC ancora previous day):
+
+- `test_daily_volume_cap_exceeded_raises`
+- `test_deals_count_cap_per_day_exceeded`
+- `test_counters_reset_on_new_day`
+- `test_counters_not_reset_same_day`
+
+Root cause:
+
+- Verifier service scrive `last_reset_date` via `datetime.utcnow()` (UTC date)
+- Test asserts `mandate.last_reset_date.date() == date.today()` (local date)
+- Mismatch durante CET/CEST offset window (local midnight → UTC midnight = 1-2h gap)
+
+V0 acceptable workaround:
+
+- Bug transient, surfaces solo late-night session (CEST: ~00:00-02:00 local)
+- Tests passano durante daytime (UTC date == local date)
+- Founder-solo dev, niente CI parallel, niente blocking
+- Già coperto da pre-existing IDEAS_BACKLOG entry "TZ-naive datetime audit V0.5+" (FASE 7.4 catalogata)
+
+**Action V0.5+ pre-launch**:
+
+- Refactor verifier `last_reset_date` per usare un helper `utc_today()` consistentemente
+- O alternative: refactor test assertions a usare `datetime.utcnow().date()` invece di `date.today()`
+- Audit known callsites: `mandate_verifier.py` (counter reset logic), `agent_scheduler._today_utc`
+- Test deterministic via `freezegun` o time mocking
+
+**Effort**: 2-3 ore (audit + fix + test deterministic).
+
+**Cross-reference**: questa entry è specifica manifestation del bug catalogato in pre-existing entry "TZ-naive datetime audit (V0.5+ pre-launch)" da FASE 7.4 IDEAS_BACKLOG (backend repo).
