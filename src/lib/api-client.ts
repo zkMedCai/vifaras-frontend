@@ -83,6 +83,14 @@ export type MandateDraftResponse = JsonResponse<'/api/mandates/draft', 'post'>
 export type MandateSubmitRequest = JsonRequest<'/api/mandates/submit', 'post'>
 export type MandateSubmitResponse = JsonResponse<'/api/mandates/submit', 'post'>
 
+export type IntentListResponse = JsonResponse<'/api/intents', 'get'>
+export type IntentResponse = JsonResponse<'/api/intents/{intent_id}', 'get'>
+export type CreateIntentRequest = JsonRequest<'/api/intents', 'post'>
+export type CreateIntentResponse = JsonResponse<'/api/intents', 'post'>
+export type UpdateIntentRequest = JsonRequest<'/api/intents/{intent_id}', 'patch'>
+export type UpdateIntentResponse = JsonResponse<'/api/intents/{intent_id}', 'patch'>
+export type CancelIntentResponse = JsonResponse<'/api/intents/{intent_id}', 'delete'>
+
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
 
@@ -124,5 +132,36 @@ export const api = {
     request<MandateSubmitResponse>('/api/mandates/submit', {
       method: 'POST',
       body,
+    }),
+
+  intentsList: (params?: { status?: string; side?: string; limit?: number; offset?: number }) => {
+    const queryString = params
+      ? '?' +
+        new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)]),
+        ).toString()
+      : ''
+    return request<IntentListResponse>(`/api/intents${queryString}`)
+  },
+
+  intentGet: (id: string) => request<IntentResponse>(`/api/intents/${id}`),
+
+  intentCreate: (body: CreateIntentRequest) =>
+    request<CreateIntentResponse>('/api/intents', {
+      method: 'POST',
+      body,
+    }),
+
+  intentUpdate: (id: string, body: UpdateIntentRequest) =>
+    request<UpdateIntentResponse>(`/api/intents/${id}`, {
+      method: 'PATCH',
+      body,
+    }),
+
+  intentCancel: (id: string) =>
+    request<CancelIntentResponse>(`/api/intents/${id}`, {
+      method: 'DELETE',
     }),
 }
