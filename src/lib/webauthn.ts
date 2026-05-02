@@ -8,6 +8,7 @@ import type {
   RegistrationResponseJSON,
 } from '@simplewebauthn/types'
 import { api } from './api-client'
+import { decodeAccessToken } from './jwt-decode-helper'
 
 export async function registerNewPasskey(email: string) {
   const begin = await api.signupBegin({ email })
@@ -21,8 +22,9 @@ export async function registerNewPasskey(email: string) {
     challenge_token: begin.challenge_token,
   })
 
+  const tier = decodeAccessToken(tokens.access_token)?.tier ?? 0
   return {
-    user: { id: tokens.user_id, email },
+    user: { id: tokens.user_id, email, tier },
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
   }
@@ -40,8 +42,9 @@ export async function loginWithPasskey(email: string) {
     challenge_token: begin.challenge_token,
   })
 
+  const tier = decodeAccessToken(tokens.access_token)?.tier ?? 0
   return {
-    user: { id: tokens.user_id, email },
+    user: { id: tokens.user_id, email, tier },
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
   }

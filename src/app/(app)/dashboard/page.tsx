@@ -1,23 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
+import { useAuthHydrated } from '@/lib/use-auth-hydrated'
 
 export default function DashboardPage() {
   const router = useRouter()
   const user = useAuthStore((s) => s.user)
   const accessToken = useAuthStore((s) => s.accessToken)
   const logout = useAuthStore((s) => s.logout)
-
-  const [hydrated, setHydrated] = useState(false)
-  useEffect(() => {
-    if (useAuthStore.persist.hasHydrated()) {
-      setHydrated(true)
-      return
-    }
-    return useAuthStore.persist.onFinishHydration(() => setHydrated(true))
-  }, [])
+  const hydrated = useAuthHydrated()
 
   useEffect(() => {
     if (hydrated && !accessToken) {
