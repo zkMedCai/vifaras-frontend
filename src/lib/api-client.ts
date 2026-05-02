@@ -80,6 +80,9 @@ export type AgentsMineResponse = JsonResponse<'/api/agents/mine', 'get'>
 export type MandateDraftRequest = JsonRequest<'/api/mandates/draft', 'post'>
 export type MandateDraftResponse = JsonResponse<'/api/mandates/draft', 'post'>
 
+export type MandateSubmitRequest = JsonRequest<'/api/mandates/submit', 'post'>
+export type MandateSubmitResponse = JsonResponse<'/api/mandates/submit', 'post'>
+
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
 
@@ -113,6 +116,12 @@ export const api = {
 
   createMandateDraft: (body: MandateDraftRequest) =>
     request<MandateDraftResponse>('/api/mandates/draft', {
+      method: 'POST',
+      body,
+    }),
+
+  submitMandate: (body: MandateSubmitRequest) =>
+    request<MandateSubmitResponse>('/api/mandates/submit', {
       method: 'POST',
       body,
     }),

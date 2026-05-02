@@ -116,3 +116,99 @@ Parking lot di scope creep, decisioni rinviate, e blocker schedulati.
 - Eventuale refactor di styling se hand-roll era stato fatto con classi diverse da shadcn convention
 
 **Razionale per hand-roll preservato post-migration**: i componenti hand-rolled sono pochi e semplici. Sostituirli con shadcn è 1-2 ore di lavoro. Niente lock-in tecnico.
+
+### Frontend test infrastructure setup (V0.5+ pre-launch CRITICAL)
+
+**Trigger**: pre-launch alpha esterno o scope feature crescente.
+
+**Background**: V0 frontend FASE 10.0 + 10.1.x è "smoke verify only" — niente vitest/jest, niente React Testing Library, niente `__tests__/` directory. Acceptance gate corrente: `npm run lint && npx tsc --noEmit && npm run format:check` + manual smoke verify.
+
+V0 acceptable per founder-solo dev velocity. Pre-launch alpha esterno richiede automated regression coverage.
+
+**Action V0.5+**:
+
+- Install `vitest` + `@testing-library/react` + `@testing-library/jest-dom` + `@testing-library/user-event`
+- Configure `vitest.config.ts` con jsdom environment
+- Setup `__tests__/` directory + test groups: jwt-decode helpers, store actions (auth + mandate), component rendering (TierGuard, MandateSlider), mutation flow integration (useCreateDraft, useSubmitMandate)
+- npm script `test` + `test:watch`
+- CI integration (GitHub Actions equivalent)
+
+**Test-deferred files accumulati FASE 10.1.x**: `jwt-decode-helper.ts`, `auth-store.ts` (atomic setAccessToken), `use-auth-hydrated.ts`, `mandate-store.ts`, `mandate-steps.ts`, `MandateSlider.tsx`, all 8 `/onboarding/mandate/*` routes, `mandate-queries.ts` (useCreateDraft + useSubmitMandate), `agent-queries.ts` (useAgentsMine + useFirstPendingMandateAgent), `webauthn.ts` (signMandateWithPasskey), `TierGuard.tsx`, sign screen error mapping (8 paths).
+
+**Effort**: 4-6 ore (setup infra + 10-15 test foundational + CI wire).
+
+### Backend status field Literal narrowing (V0.5+ refinement)
+
+**Trigger**: V0.5+ pre-launch type safety pass.
+
+**Background**: V0 backend schema declared `status: str` con doc comment. OpenAPI schema dichiara generic `string`, frontend riceve `string` invece di union narrow. Lost type safety cross-stack. Esempio concreto: `agent.status` enum reale è `pending_mandate | active | paused | revoked` ma frontend la legge come generic string (vedi `agent-queries.useFirstPendingMandateAgent` filter via string literal comparison senza exhaustive switch protection).
+
+**Action V0.5+**:
+
+- Pydantic schema: `agents.status`, `mandates.status`, `deals.status`, ecc. annotare con `Literal[...]`
+- Re-generate `api-types.ts`
+- Frontend rivede exhaustive switch coverage dove rilevante
+
+**Effort**: 2-3 ore (audit fields + refactor + test backend).
+
+### Backend Pydantic PayloadSummary typed model (V0.5+ refinement)
+
+**Trigger**: V0.5+ pre-launch type safety pass.
+
+**Background**: V0 backend `payload_summary` campo è `dict[str, Any]` generic. OpenAPI auto-gen → frontend `{[key: string]: unknown}`. Frontend type cast esplicit per accesso narrow (vedi `summary/page.tsx` unwrap `human_readable` field). Stesso pattern per `next_step` field in `SubmitResponse`.
+
+**Action V0.5+**:
+
+- Pydantic schema: `class PayloadSummary(BaseModel)` con fields `human_readable: str`, `key_fields: list[KeyField]`. Stesso approccio per `next_step` se utilizzato frontend.
+- Refactor `_build_payload_summary` per ritornare typed model
+- Re-generate `api-types.ts`
+- Frontend rimuove type cast → narrow type cross-stack
+
+**Effort**: 1-2 ore (schema refactor + test + frontend cleanup).
+
+### mandate-store categoriesAllowed cleanup (V0.5+ refinement)
+
+**Trigger**: V0.5+ se categories rimangono server-resolved.
+
+**Background**: [10.1.1.5.7] discovery rivelato che `DraftConstraintsInput` non ha `categories_allowed` field — server-side resolved via `V0_DEFAULT_CATEGORIES_ALLOWED = ("*",)` in `platform_limits.py`. Frontend `mandate-store.ts` ha `categoriesAllowed: ['*']` field cosmetico (niente lo legge per API request — vedi `summary/page.tsx` handleConfirm body construction).
+
+**Action V0.5+**:
+
+- Decisione: categories user-selectable (UI) vs server-resolved permanente
+- Se UI: aggiungi field a `DraftConstraintsInput` backend + UI checkbox in categories screen + store field becomes used
+- Se server-resolved permanente: rimuovi field da store + simplify categories screen narrative
+
+**Effort**: dipende da path (5 min cleanup vs 4-6h UI implementation).
+
+### AuthBootstrap UX feedback su refresh 401 (V0.5+ refinement)
+
+**Trigger**: V0.5+ pre-launch UX polish.
+
+**Background**: V0 [10.1.1 S2 calibrazione] `AuthBootstrap` su refresh 401 fa silent skip + `console.warn`. User continua session con access_token corrente fino a expiry naturale. Niente UX feedback di "refresh fallito". Pattern healthy V0 (niente kick-out aggressivo durante backend restart o JWT secret rotation), ma utente non sa che la sessione è vicino expiry.
+
+**Action V0.5+**:
+
+- Toast non-blocking "Sessione di lunga durata scaduta, accesso continuo fino a expiry"
+- Optional: trigger logout proactively quando access_token expire detected via JWT `exp` claim
+- Optional: retry refresh flow at intervals (exponential backoff)
+- Optional: distinguish session-genuinely-invalid (logout) vs transient-401 (skip)
+
+**Effort**: 1-2 ore (toast component se non esiste + AuthBootstrap conditional + access_token expiry check).
+
+### WebAuthn rpId env var configuration cross-deploy (V0.5+ pre-launch)
+
+**Trigger**: pre-launch deploy non-localhost.
+
+**Background**: V0 [10.1.1.7.1] `signMandateWithPasskey` usa browser default `rpId` (current hostname). Funziona localhost dev. Prod deploy richiede:
+
+- Backend `webauthn_rp_id` env var = production domain (e.g., `vifaras.com`)
+- Frontend opzionale `rpId` esplicit nel `optionsJSON` (preferred per consistency)
+- Mismatch backend rpId vs frontend → WebAuthn verification fail silenzioso
+
+**Action V0.5+**:
+
+- Frontend `signMandateWithPasskey` legge rpId da `NEXT_PUBLIC_WEBAUTHN_RP_ID` env var
+- Documenta deploy checklist match backend `WEBAUTHN_RP_ID` ↔ frontend `NEXT_PUBLIC_WEBAUTHN_RP_ID`
+- Sub-task del deploy preparation (Vercel / Fly.io / equivalent)
+
+**Effort**: 30 min (env var read + optionsJSON pass + documentation).

@@ -30,6 +30,44 @@ export async function registerNewPasskey(email: string) {
   }
 }
 
+interface SignMandateInput {
+  challenge: string
+}
+
+interface WebAuthnAssertionPayload {
+  id: string
+  rawId: string
+  type: string
+  response: Record<string, unknown>
+}
+
+// Step-up authentication for mandate signing. Backend /draft already issued
+// the challenge bound to user + payload hash, so we don't fetch options from
+// /api/auth/login/begin — we construct a minimal optionsJSON from the
+// challenge in the draft response. rpId is omitted: browser defaults to the
+// current hostname, which matches backend webauthn_rp_id="localhost" in dev.
+// Prod deploy requires explicit env-var match (IDEAS_BACKLOG V0.5+).
+export async function signMandateWithPasskey(
+  input: SignMandateInput,
+): Promise<WebAuthnAssertionPayload> {
+  const optionsJSON = {
+    challenge: input.challenge,
+    userVerification: 'required' as const,
+    timeout: 60_000,
+  }
+
+  const assertion = await startAuthentication({
+    optionsJSON: optionsJSON as unknown as PublicKeyCredentialRequestOptionsJSON,
+  })
+
+  return {
+    id: assertion.id,
+    rawId: assertion.rawId,
+    type: assertion.type,
+    response: assertion.response as unknown as Record<string, unknown>,
+  }
+}
+
 export async function loginWithPasskey(email: string) {
   const begin = await api.loginBegin({ email })
 

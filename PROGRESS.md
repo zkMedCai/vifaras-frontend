@@ -390,6 +390,7 @@ Probe `POST /api/auth/login/begin` con email non registrata → **404** code `us
 **Calibrazione vs brief**:
 
 Founder proponeva 2 alternative:
+
 - (A) `useState + useEffect` simple
 - (B) `hasHydrated()` direct call in render
 
@@ -469,3 +470,111 @@ src/
 - **FASE 10.1+** intent flow, mandate config, deal signing — completare experience consumer V0
 - **FASE 7.1-7.4 backend**: rate limiting deep, observability, cost monitoring, pre-launch checklist
 - **Landing pubblica + dominio**: deploy Vercel + DNS + waitlist alpha
+
+---
+
+## ✅ FASE 10.1.1 — Tier 2 mandate creation flow (2026-05-02)
+
+**Status**: Mandate creation flow end-to-end funzionante. User Tier 1 può configurare mandate, firmare biometrica, upgrade Tier 2.
+
+### Sessions shipped
+
+| Session | Commit                                     | Highlight                                                                        |
+| ------- | ------------------------------------------ | -------------------------------------------------------------------------------- |
+| S1      | `abefe86` (frontend) + `e6fa923` (backend) | Foundations: tier guard + routing + store + GET /api/agents/mine                 |
+| S2      | `47c6381`                                  | UI screens 1-6 + POST /draft integration + AuthBootstrap 401-soft fix            |
+| S3      | (this entry)                               | WebAuthn step-up + POST /submit + token swap + success + error mapping + closure |
+
+### Capabilities shipped
+
+**Authentication & state**:
+
+- `jwt-decode` + tier propagation cross-stack
+- `useAuthHydrated()` shared hook (extracted from inline dashboard logic)
+- `TierGuard` component (hydration-safe + tier check + redirect)
+- `AuthBootstrap` refresh-on-mount con 401-soft handling (refresh invalidato ≠ logout — preserva session su backend restart / token consumed)
+- Token swap atomic post-mandate-submit (tier 1 → tier 2): `setAccessToken(new_access_token)` decoda JWT + estrae tier + merge `user.tier` insieme
+
+**Mandate flow UI**:
+
+- 8 routes `/onboarding/mandate/[step]` dynamic: welcome / per-deal / budget / deals-per-day / categories / summary / sign / success
+- `mandateStore` Zustand transient (no persist) con defaults backend-aligned (€100/€500/3, `['*']` categories, `['IT']` geo)
+- `MandateSlider` shared component (native range, accessible via `aria-label`, € prefix conditional)
+- Welcome con agent fetch + reset on mount + CTA "Inizia"
+- 3 sliders (per-deal, budget, deals-per-day) con range/step backend-aligned
+- Categories read-only V0 con narrative italiana (forbidden umbrella alcol/armi/sostanze)
+- Summary con client-side reconstruction + POST `/draft` + unwrap `payload_summary.human_readable`
+- Sign con WebAuthn step-up biometric + POST `/submit` + token swap + 8 error codes mapped
+- Success celebration UX (green checkmark + "Mandato attivo") + reset store
+
+**Backend wire**:
+
+- Nuovo endpoint `GET /api/agents/mine` (tier-1 gate, 4 test, 502 verdi)
+- TanStack Query hooks: `useAgentsMine`, `useFirstPendingMandateAgent`, `useCreateDraft`, `useSubmitMandate`
+- WebAuthn step-up via `@simplewebauthn/browser` con minimal optionsJSON (challenge + userVerification 'required' + timeout 60s)
+
+**Error mapping consistency** (sign screen `mapBackendError`):
+
+| Backend code                                       | UX italiano                                                |
+| -------------------------------------------------- | ---------------------------------------------------------- |
+| `draft_expired`                                    | Sessione scaduta. Ricomincia la configurazione.            |
+| `draft_not_found`                                  | Sessione persa. Ricomincia la configurazione.              |
+| `draft_already_consumed`                           | Mandato già firmato. Vai alla home.                        |
+| `webauthn_verification_failed`                     | Firma non riuscita. Riprova.                               |
+| `limits_exceed_platform_cap`                       | Configurazione non permessa. Riprova con valori inferiori. |
+| `agent_in_wrong_state` / `invalid_tier_transition` | Mandato già configurato. Vai alla home.                    |
+| `NotAllowedError` (browser)                        | Firma annullata. Riprova quando sei pronto.                |
+| Generic `Error`                                    | Errore tecnico. Riprova più tardi.                         |
+
+### Backend bridge changes
+
+- New endpoint `GET /api/agents/mine` (commit backend `e6fa923`)
+- Test count backend: 498 → 502 (+4: ordering, empty, user isolation, tier-0 → 402 guard)
+
+### Smoke verify end-to-end
+
+User Tier 1 (SQL stub) → welcome → 5 step config → summary → POST `/draft` 200 → sign → biometric Windows Hello → POST `/submit` 200 → tier 2 swap → success → dashboard.
+
+Verified manually on Linux WSL2 + Chrome + Windows Hello biometric:
+
+- DB: User `ada311be-...` tier=2, Mandate `12810cca-...` status=active, Agent `a00093f1-...` status=active (era pending_mandate)
+- Frontend store: `user.tier: 2` propagated correctly
+- Audit log strutturato `audit.mandate_signed` persisted
+
+### Discovery findings catturati durante FASE 10.1.1
+
+Pattern preservato come standard: discovery batte assumption silente. Mismatch catched cross-session:
+
+- **S1**: `CurrentUser` dataclass shape (vs `User` ORM); `Agent.status` enum 4 valori (vs doc comment 3); `agents.py` non esisteva; frontend store path `src/lib/auth-store.ts` (vs brief `src/stores/auth.ts`); test infra frontend non installata
+- **S2**: `payload_summary` nested object con `human_readable` + `key_fields` (vs flat string assumption); `max_total_volume_eur_per_mandate` field name precise (vs shorthand); `categories_allowed` non in `DraftConstraintsInput` (server-resolved); api-client esistente esporta `api` object con metodi specific (vs generic `.get/.post`); flat `*-queries.ts` location (vs `lib/queries/` subdir); type aliases via `JsonResponse`/`JsonRequest` helper (vs `components['schemas']`)
+- **S2 smoke verify catch**: `AuthBootstrap` 401 → logout aggressivo bug, calibrato a silent-skip + `console.warn` (refresh-on-mount è "best effort", niente kick-out durante dev workflow)
+- **S3**: `@simplewebauthn/browser` `startAuthentication({optionsJSON: ...})` wrapper signature (vs flat options); backend `/draft` ritorna challenge string only, frontend constructs `PublicKeyCredentialRequestOptionsJSON` minimal; `WebAuthnAssertionPayload.rawId` camelCase preserved cross-stack; rpId omesso (browser default localhost match backend dev config); `payload_summary` cast a `{human_readable: string}` per accesso narrow
+
+Pattern: smoke verify reale cattura bug latenti che lint+tsc+code review non vedono.
+
+### IDEAS_BACKLOG additions (6 V0.5+ entries)
+
+- Frontend test infrastructure setup (CRITICAL pre-launch)
+- Backend status field `Literal[...]` narrowing
+- Backend Pydantic `PayloadSummary` typed model
+- `mandate-store` `categoriesAllowed` cleanup
+- `AuthBootstrap` UX feedback su refresh 401
+- WebAuthn `rpId` env var configuration cross-deploy
+
+### Status check post-FASE 10.1.1
+
+- ✅ Backend FASE 7 (production-grade per V0 alpha)
+- ✅ Frontend FASE 10.0 (auth)
+- ✅ Frontend FASE 10.1.1 (mandate creation)
+- 🔲 Frontend FASE 10.1.2 (intent CRUD UI)
+- 🔲 Frontend FASE 10.1.3 (match view + negotiation read-only)
+- 🔲 Frontend FASE 10.1.4 (deal pending signature step-up)
+- 🔲 FASE 8 V0.5+ (Self real integration deferred — SQL stub workflow per dev)
+
+### Tag
+
+`v0-frontend-mandate-creation`
+
+### Next
+
+[10.1.2] Intent CRUD UI — primo flow Tier 2 user-facing (create/list/edit/delete intent + agent inizia matching). Stima 8-12h.
