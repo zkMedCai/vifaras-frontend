@@ -18,6 +18,7 @@ interface AuthState {
   // Atomic JWT swap: decode the new token, derive tier, and apply both to the
   // user object in one set() so a render never sees a token/tier mismatch.
   setAccessToken: (token: string) => void
+  setRefreshToken: (token: string) => void
   setTier: (tier: Tier) => void
   logout: () => void
 }
@@ -38,6 +39,7 @@ export const useAuthStore = create<AuthState>()(
             user: state.user ? { ...state.user, tier } : state.user,
           }
         }),
+      setRefreshToken: (token) => set({ refreshToken: token }),
       setTier: (tier) =>
         set((state) => ({
           user: state.user ? { ...state.user, tier } : state.user,

@@ -13,11 +13,54 @@ export class ApiError extends Error {
   }
 }
 
+// Single-flight refresh: if multiple concurrent requests get 401 simultaneously,
+// only ONE refresh call goes out. Others wait for the same promise.
+// Without this, 5 parallel 401s would each consume the (single-use) refresh token,
+// invalidating it for siblings 2-5.
+let refreshInflight: Promise<string> | null = null
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshInflight) return refreshInflight
+
+  const refreshToken = useAuthStore.getState().refreshToken
+  if (!refreshToken) {
+    throw new ApiError(401, { code: 'no_refresh_token' })
+  }
+
+  refreshInflight = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        // Refresh failed: the refresh token is dead. Logout immediately —
+        // there is nothing we can do but force re-login.
+        useAuthStore.getState().logout()
+        const errorBody = await res.json().catch(() => null)
+        throw new ApiError(res.status, errorBody)
+      }
+      const data = (await res.json()) as RefreshResponse
+      // Backend rotates: the response carries a brand-new refresh token,
+      // and the old one is now invalid. Persist BOTH atomically.
+      useAuthStore.getState().setAccessToken(data.access_token)
+      useAuthStore.getState().setRefreshToken(data.refresh_token)
+      return data.access_token
+    } finally {
+      refreshInflight = null
+    }
+  })()
+
+  return refreshInflight
+}
+
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function request<T>(path: string, options: RequestOptions = {}, _retry = false): Promise<T> {
   const { body, headers, ...rest } = options
 
   const mergedHeaders: Record<string, string> = {
@@ -44,6 +87,23 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     } catch {
       errorBody = await response.text().catch(() => null)
     }
+
+    // 401-retry interceptor: if the access token expired mid-session,
+    // attempt a single refresh-then-retry before surfacing the error.
+    // We only retry once (`_retry` flag) to avoid infinite loops if
+    // the refreshed token is also rejected.
+    // The refresh endpoint itself is excluded — a 401 there means the
+    // refresh token itself is dead, and refreshAccessToken() handles logout.
+    if (response.status === 401 && !_retry && path !== '/api/auth/refresh') {
+      try {
+        await refreshAccessToken()
+        return request<T>(path, options, true)
+      } catch {
+        // Refresh failed: surface the original 401 unchanged.
+        throw new ApiError(response.status, errorBody)
+      }
+    }
+
     throw new ApiError(response.status, errorBody)
   }
 
