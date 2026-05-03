@@ -8,6 +8,8 @@ import {
   type CreateIntentResponse,
   type IntentListResponse,
   type IntentResponse,
+  type NaturalIntentDraftRequest,
+  type NaturalIntentDraftResponse,
   type UpdateIntentRequest,
   type UpdateIntentResponse,
 } from './api-client'
@@ -44,6 +46,12 @@ export function useCreateIntent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: INTENTS_LIST_QUERY_KEY })
     },
+  })
+}
+
+export function useDraftIntentFromText() {
+  return useMutation<NaturalIntentDraftResponse, Error, NaturalIntentDraftRequest>({
+    mutationFn: (body) => api.intentDraftFromText(body),
   })
 }
 

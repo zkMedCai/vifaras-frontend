@@ -147,6 +147,8 @@ export type MandateSubmitResponse = JsonResponse<'/api/mandates/submit', 'post'>
 
 export type IntentListResponse = JsonResponse<'/api/intents', 'get'>
 export type IntentResponse = JsonResponse<'/api/intents/{intent_id}', 'get'>
+export type NaturalIntentDraftRequest = JsonRequest<'/api/intents/draft-from-text', 'post'>
+export type NaturalIntentDraftResponse = JsonResponse<'/api/intents/draft-from-text', 'post'>
 export type CreateIntentRequest = JsonRequest<'/api/intents', 'post'>
 export type CreateIntentResponse = JsonResponse<'/api/intents', 'post'>
 export type UpdateIntentRequest = JsonRequest<'/api/intents/{intent_id}', 'patch'>
@@ -233,6 +235,12 @@ export const api = {
   },
 
   intentGet: (id: string) => request<IntentResponse>(`/api/intents/${id}`),
+
+  intentDraftFromText: (body: NaturalIntentDraftRequest) =>
+    request<NaturalIntentDraftResponse>('/api/intents/draft-from-text', {
+      method: 'POST',
+      body,
+    }),
 
   intentCreate: (body: CreateIntentRequest) =>
     request<CreateIntentResponse>('/api/intents', {

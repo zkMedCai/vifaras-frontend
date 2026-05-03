@@ -879,3 +879,41 @@ Risultati:
 - Lint verde.
 - Build verde.
 - Live smoke `/market` HTTP `200`.
+
+---
+
+## FASE 10.1.3.2 — Agent-first intent composer — 2026-05-03
+
+### Implementazione
+
+- `/intents/new` ora parte da un composer naturale:
+  - textarea incarico agente;
+  - CTA `Prepara bozza`;
+  - fallback `Compila manualmente`.
+- Aggiunto client API per `POST /api/intents/draft-from-text`.
+- Aggiunto hook `useDraftIntentFromText`.
+- La risposta AI popola lo store intent e apre una review strutturata.
+- Il form manuale resta come review/edit prima della pubblicazione.
+- Validazione client aggiornata:
+  - price relationship SELL: target >= minimo;
+  - price relationship BUY: target <= massimo;
+  - missing fields dalla bozza mostrati in review.
+
+### Verifica
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run build
+curl -sS -o /tmp/vifaras_intents_new.html -w "%{http_code}" -m 5 http://127.0.0.1:3000/intents/new
+```
+
+Risultati:
+
+- TypeScript verde.
+- Lint verde.
+- Build verde.
+- Live dev server `3000` risponde `500` per cache `.next` corrotta dopo
+  `next build` mentre `next dev` era gia acceso (`Cannot find module
+  './948.js'`). E' lo stesso failure mode gia visto in 10.1.3; serve restart
+  frontend dev server o clear `.next`.
