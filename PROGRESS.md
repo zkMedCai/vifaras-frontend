@@ -611,3 +611,160 @@ V0.5+ pre-launch action plans documented in IDEAS_BACKLOG (frontend repo):
 **Pattern preservato**: niente regression S3, smoke verify successful end-to-end, history granular audit-friendly. Tag `v0-frontend-mandate-creation` semanticamente corretto e immutable. Backend test count `502` confermato outside timezone boundary window (Bug 2 transient non blocking, surfaces solo late-night CEST).
 
 **FASE 10.1.1 + follow-up audit chiuso definitive.**
+
+---
+
+## FASE 10.1.2 — Intent CRUD UI
+
+Discovery-first end-to-end con 3 sub-fasi: foundations + UI screens + smoke verify (con 3 hotfix runtime calibrazioni emerse durante smoke).
+
+### Discovery [10.1.2.0]
+
+Backend reality discovery completed pre-implementation:
+
+- 5 endpoints: POST /api/intents, GET /api/intents (paginated), GET /api/intents/{intent_id}, PATCH /api/intents/{intent_id}, DELETE /api/intents/{intent_id}
+- Tutti tier=0 endpoint MA UX V0 target tier=2 (post-mandate)
+- Caps: T0=5 active, T1=10 active, T2 reads from `mandate.max_active_intents`
+- Tier=2 required SOLO per price update
+- MAX_TITLE_LEN=200, MAX_DESCRIPTION_LEN=2000, MAX_DURATION_DAYS=30 (def 14), MAX_PRICE_PER_INTENT_EUR=10000
+- 22 categories closed vocabulary
+- Side enum: `buy`/`sell`, `trade` rejected V0
+- `hard_constraints` location regex `^[^,]+,\s*[A-Z]{2}$` only validated, `soft_preferences` pure pass-through
+- Status enum: `active | matched | closed | expired | cancelled`
+- Embedding sync inline, 503 retry pattern
+- Soft cancel cascade (negotiations cancelled + matches expired + audit log)
+- 13 error codes taxonomy
+
+Decisions S1 locked: A multi-page CRUD, B cards layout, C empty state custom + 3 esempi, D edit shows editable + read-only `hard_constraints` + warning restrictions, E delete cascade impact dialog, F two prices separated explicit (italian labels: "Prezzo target ideale" + "Prezzo min/max accettabile"), G `hard_constraints` location only V0, H `soft_preferences` SKIP V0, TierGuard requiredTier=2.
+
+### S1 — Foundations [10.1.2.1] (commit 1b5c164)
+
+**Files written**:
+- `src/app/(app)/intents/{layout.tsx, page.tsx, new/page.tsx, [id]/edit/page.tsx}` (4 routes scaffolded)
+- `src/lib/intent-store.ts` (Zustand transient, 9 fields, defaults backend-aligned)
+- `src/lib/intent-categories.ts` (22 IT labels + 6 GROUPS + helpers)
+- `src/lib/intent-status.ts` (5 IntentStatus + STATUS_DISPLAY tailwind + getStatusDisplay)
+- `src/lib/intent-queries.ts` (5 hooks with cache invalidation)
+- `src/lib/api-client.ts` extended (5 methods + 7 type aliases)
+
+**Critical S1 catch**: backend uses `/api/intents/{intent_id}` NOT `{id}` for `JsonResponse`/`JsonRequest` type helpers. Without calibration → never type aliases.
+
+### S2 — UI screens implementation [10.1.2.2]
+
+#### Discovery [10.1.2.2.0] — 4 mismatch CALIBRATED
+
+| Brief code | Calibrato realtà |
+|-----------|-----------------|
+| `intent.id` | `intent.intent_id` |
+| `data?.items ?? []` | `data?.intents ?? []` |
+| `durationDays: 30` (placeholder) | recompute `(expires_at - created_at) / 86_400_000 ms` |
+| `intent.hard_constraints?.location?.split(...)` | `(intent.hard_constraints as Record<string, unknown>)?.location` cast |
+
+#### [10.1.2.2.1] List view
+
+`IntentCard` inline + `EmptyState` inline + 3 esempi placeholder + status badge color-coded + italian labels (Compro/Vendo) + 2 prezzi visualizzati (€{ideal} (min €{reservation})) + locale `'it-IT'` date.
+
+#### [10.1.2.2.2] Create form
+
+9 fields + `validateClient` module-local + `mapBackendError` (8 codes) + native HTML form + Side custom 2-button + Category select grouped + Duration range slider + dynamic reservation price label by side + reset on mount via selector pattern `useIntentStore((s) => s.reset)`.
+
+Calibrazione: `description: string | null` (NOT `undefined`) per backend type.
+
+#### [10.1.2.2.3] Edit form
+
+Pre-populate via `loadFromIntent` + `useIntent(id)` + recompute `durationDays` + `hard_constraints` location read-only + conditional disabled (status !== 'active') + tier 2 guard prices + danger zone "Annulla intent" + custom modal confirmation backdrop + cascade impact warning + `cancelIntent` mutation. Mapping 11 backend errors italian.
+
+#### [10.1.2.2.4] Smoke verify end-to-end + 3 hotfix runtime calibrazioni
+
+**Setup pre-condizioni**:
+- Re-login fresh + mandate flow reale completed (tier 1 → 2) — niente regression FASE 10.1.1
+- Stop-gate intermediate verde
+
+**Hotfix [10.1.2.2.4.1] — 401-retry interceptor** (`api-client.ts` + `auth-store.ts`)
+
+Backend access_token TTL=15min. Frontend `request<T>()` helper niente faceva auto-refresh on 401. Mid-session token expiry → POST /api/intents 401 propagated to user → "errore tecnico riprova" UX broken.
+
+Hotfix: `refreshAccessToken()` helper + single-flight pattern + 401-retry block in `request<T>()` (skip retry on `/api/auth/refresh` itself + `_retry` flag prevent infinite loop). Auth-store extended with `setRefreshToken` action per atomic rotation persist (backend rotation: each refresh consumes old refresh + emits new pair).
+
+Pattern parallelo a [10.1.1.7.2] AuthBootstrap 401-soft hotfix: same problem space (refresh-token state staleness), different layer (active-request retry vs mount-time refresh).
+
+**Hotfix [10.1.2.2.4.2] — `EMBEDDING_BACKEND=fake`** (backend `.env`)
+
+Smoke verify revealed `OPENAI_API_KEY is empty` exception in backend embedding service (FASE 4.2 inline embedding generation in `create_intent`) → 500 Internal Server Error during POST /api/intents. CORS bypass classic FastAPI middleware order issue (500 niente carry CORS headers, browser block fetch with `net::ERR_FAILED`).
+
+Hotfix dev workflow: `EMBEDDING_BACKEND=fake` env var (PROJECT_BRIEF 4.2 documented testing path: hash-based fake embedding deterministic). FASE 10.1.3 prerequisite: setup `OPENAI_API_KEY` platform-managed reale per match service cosine similarity test (vedi IDEAS_BACKLOG entry).
+
+**Hotfix [10.1.2.2.4.3] — edit form omit immutable fields** (`edit/page.tsx` `handleSubmit`)
+
+Backend `update_intent` rejecta categoricamente `category` e `side` come IMMUTABLE post-create (raise `CategoryNotModifiable` / `SideNotModifiable`, http_status=422). Frontend impl S2 [10.1.2.2.3] inviava body completo from store → 422.
+
+Hotfix: client-side omit `category` + `side` da PATCH body. Send `reservation_price_eur` + `ideal_price_eur` SOLO if changed (avoid unnecessary tier-2 price gate triggering). PATCH partial-update semantics correct.
+
+Pattern preserved: discovery-first niente verified backend `update_intent` field-level gating in [10.1.2.2.0]. Reviewer-pattern catch: ALWAYS verify PATCH endpoint immutability semantics field-by-field.
+
+**Smoke verify summary** [10.1.2.2.4]:
+
+| Step | Result |
+|------|--------|
+| 1 list empty state custom + 3 esempi | ✅ |
+| 2-3 nav new + form fill | ✅ |
+| 4 POST /api/intents | ✅ 201 (post hotfix .2) |
+| 5-7 list 1 card + nav edit + pre-populate | ✅ |
+| 8-9 modify title + PATCH | ✅ 200 (post hotfix .3) |
+| 10-11 list update + nav edit | ✅ |
+| 12-13 modal cancel + DELETE | ✅ 200 (status='cancelled' + closed_at popolato verified via GET) |
+| 14-15 list cancelled + edit disabled | ✅ (warning yellow + all fields disabled + buttons disabled) |
+
+End-to-end CRUD verified.
+
+### IDEAS_BACKLOG additions FASE 10.1.2 (13 V0.5+ entries)
+
+Discovery batch (8):
+
+1. Backend categories localized labels endpoint (i18n preparation)
+2. UX warning intent price > mandate cap (cross-tier guidance)
+3. Backend `hard_constraints` schema typed model
+4. Backend `soft_preferences` UX design pattern
+5. Toast component shared cross-flow (V0.5+ UX polish)
+6. Backend `duration_days` field expose (avoid client recompute drift)
+7. Public deals feed: trust signal + marketing surface (V0.5+ post-launch, design originale 2026-04-29)
+8. AI gateway / BYOK provider linking pattern (V1.5+ Anthropic OAuth primary, V2 OpenAI quando matures, brief 2.8 cross-reference)
+
+Hotfix-specific batch (5):
+
+9. AuthBootstrap selective refresh-on-mount (only when access expired, V0.5+ session economy)
+10. Backend FastAPI middleware order: CORS bypass on 5xx exception (custom exception handler V0.5+)
+11. Backend immutable fields strict vs PATCH partial-update tolerant (V0.5+ design choice)
+12. Setup `OPENAI_API_KEY` platform-managed (prerequisite FASE 10.1.3)
+13. Backend `cancel_intent` `CancelIntentResponse` counters niente verified empirically (V0.5+ toast UX)
+
+### FASE 10.1.2.5 promemoria — Conversational intake layer
+
+USP-aligned bypass form strutturato. Memoria PROJECT_BRIEF 3.1 onboarding pattern (textarea libera "voglio vendere..." → Claude API parsing → review structured fields → submit). Effort 6-10h. Decisione Path B questa session: implementation post FASE 10.1.2 S3 closure, prima di FASE 10.1.3.
+
+Cattura completa in IDEAS_BACKLOG separate entry.
+
+### Status check post-FASE 10.1.2
+
+- ✅ Backend FASE 7 (production-grade per V0 alpha)
+- ✅ Frontend FASE 10.0 (auth)
+- ✅ Frontend FASE 10.1.1 (mandate creation)
+- ✅ Frontend FASE 10.1.2 (intent CRUD UI + 3 hotfix smoke verify)
+- 🔲 Frontend FASE 10.1.2.5 (conversational intake layer — USP alignment, prossima decision-point)
+- 🔲 Frontend FASE 10.1.3 (match view + negotiation read-only — prerequisite OPENAI_API_KEY platform setup)
+- 🔲 Frontend FASE 10.1.4 (deal pending signature step-up)
+- 🔲 FASE 8 V0.5+ (Self real integration deferred)
+
+### Tag
+
+`v0-frontend-intent-crud` (post bundle commit S2)
+
+### Next
+
+[10.1.2.5] Conversational intake — textarea libera + Claude API parsing. Prerequisite Anthropic API key (platform-managed V0).
+
+OR
+
+[10.1.3] Match view + negotiation read-only — prerequisite `OPENAI_API_KEY` setup (V0 platform-managed).
+
+Decisione founder post-tag.
