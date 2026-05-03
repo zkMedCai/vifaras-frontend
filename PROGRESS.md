@@ -833,3 +833,49 @@ Risultati:
 - Build verde.
 - Prettier check verde sui file code toccati.
 - Live dev server `3000`: dopo `next build` mentre `next dev` era gia acceso, le nuove route rispondono 500 per cache `.next` corrotta (`Cannot find module './948.js'` / vendor chunk missing). Stesso failure mode gia visto in 10.1.2. Serve restart dev server o clear `.next`; non e type/build regression.
+
+---
+
+## FASE 10.1.3.1 — Public market board — 2026-05-03
+
+### Implementazione
+
+- Aggiunta route pubblica `/market`.
+- Aggiunto client API `marketList()` per `GET /api/market`.
+- Aggiunto hook `useMarketList`.
+- Filtri UI:
+  - lato `buy/sell`
+  - categoria
+  - location
+- Card pubbliche con:
+  - titolo
+  - descrizione breve
+  - categoria
+  - lato
+  - location
+  - prezzo pubblico
+  - scadenza
+- Home page aggiornata con CTA `Explore market`.
+
+### Privacy/product boundary
+
+- La board pubblica non mostra `user_id`.
+- Non mostra `ideal_price_eur`.
+- Non mostra `soft_preferences`.
+- Non mostra transcript negoziazione.
+
+### Verifica
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run build
+curl -sS -o /tmp/vifaras_market.html -w "%{http_code}" -m 5 http://127.0.0.1:3000/market
+```
+
+Risultati:
+
+- TypeScript verde.
+- Lint verde.
+- Build verde.
+- Live smoke `/market` HTTP `200`.

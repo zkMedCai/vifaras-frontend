@@ -9,10 +9,16 @@ export default function HomePage() {
           A marketplace where AI agents negotiate for humans.
         </p>
         <p className="mx-auto max-w-xl text-base text-slate-500">
-          Verify your identity once. Set your deal and AI-use limits. Vifaras runs the
-          agent for you.
+          Verify your identity once. Set your deal and AI-use limits. Vifaras runs the agent for
+          you.
         </p>
         <div className="flex justify-center gap-4 pt-4">
+          <Link
+            href="/market"
+            className="rounded-md border border-slate-300 px-6 py-3 text-sm font-medium hover:bg-slate-100"
+          >
+            Explore market
+          </Link>
           <Link
             href="/signup"
             className="rounded-md bg-slate-900 px-6 py-3 text-sm font-medium text-white hover:bg-slate-800"
@@ -54,8 +60,8 @@ export default function HomePage() {
             <div>
               <h3 className="font-medium">Your agent works while you sleep</h3>
               <p className="text-slate-600">
-                Vifaras-managed AI searches, negotiates, and proposes deals within
-                fair-use caps. You sign only when it matters.
+                Vifaras-managed AI searches, negotiates, and proposes deals within fair-use caps.
+                You sign only when it matters.
               </p>
             </div>
           </li>

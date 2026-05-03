@@ -125,6 +125,8 @@ type JsonRequest<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] 
 
 export type HealthResponse = JsonResponse<'/api/health', 'get'>
 
+export type MarketListResponse = JsonResponse<'/api/market', 'get'>
+
 export type RegisterBeginRequest = JsonRequest<'/api/auth/register/begin', 'post'>
 export type RegisterCompleteRequest = JsonRequest<'/api/auth/register/complete', 'post'>
 export type LoginBeginRequest = JsonRequest<'/api/auth/login/begin', 'post'>
@@ -159,6 +161,24 @@ export type NegotiationStateResponse = JsonResponse<'/api/negotiations/{negotiat
 
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
+
+  marketList: (params?: {
+    side?: string
+    category?: string
+    location?: string
+    limit?: number
+    offset?: number
+  }) => {
+    const queryString = params
+      ? '?' +
+        new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined && v !== '')
+            .map(([k, v]) => [k, String(v)]),
+        ).toString()
+      : ''
+    return request<MarketListResponse>(`/api/market${queryString}`)
+  },
 
   signupBegin: (body: RegisterBeginRequest) =>
     request<BeginResponse>('/api/auth/register/begin', {
