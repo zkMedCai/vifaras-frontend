@@ -15,7 +15,12 @@ import {
 export const INTENTS_LIST_QUERY_KEY = ['intents', 'list'] as const
 export const INTENT_DETAIL_QUERY_KEY = (id: string) => ['intents', 'detail', id] as const
 
-export function useIntentsMine(params?: { status?: string; side?: string }) {
+export function useIntentsMine(params?: {
+  status?: string
+  side?: string
+  limit?: number
+  offset?: number
+}) {
   return useQuery<IntentListResponse>({
     queryKey: [...INTENTS_LIST_QUERY_KEY, params],
     queryFn: () => api.intentsList(params),

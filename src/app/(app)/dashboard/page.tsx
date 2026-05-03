@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
 import { useAuthHydrated } from '@/lib/use-auth-hydrated'
@@ -28,8 +29,32 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold">Hello {user.email}</h1>
           <p className="mt-2 text-slate-600">
-            Tier 0 account. Verify your identity to unlock more features.
+            Account tier {user.tier}. Gestisci intent, match e negoziazioni agentiche.
           </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Link
+            href="/intents"
+            className="rounded-lg border border-slate-200 bg-white p-4 text-sm hover:border-blue-400"
+          >
+            <p className="font-semibold text-slate-950">Intent</p>
+            <p className="mt-1 text-slate-600">Crea e modifica cosa comprare o vendere.</p>
+          </Link>
+          <Link
+            href="/matches"
+            className="rounded-lg border border-slate-200 bg-white p-4 text-sm hover:border-blue-400"
+          >
+            <p className="font-semibold text-slate-950">Match</p>
+            <p className="mt-1 text-slate-600">Consulta opportunità trovate dagli agenti.</p>
+          </Link>
+          <Link
+            href="/negotiations"
+            className="rounded-lg border border-slate-200 bg-white p-4 text-sm hover:border-blue-400"
+          >
+            <p className="font-semibold text-slate-950">Negoziati</p>
+            <p className="mt-1 text-slate-600">Leggi i transcript delle offerte.</p>
+          </Link>
         </div>
 
         <div className="space-y-4">

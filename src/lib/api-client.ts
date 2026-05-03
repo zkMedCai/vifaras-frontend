@@ -151,6 +151,12 @@ export type UpdateIntentRequest = JsonRequest<'/api/intents/{intent_id}', 'patch
 export type UpdateIntentResponse = JsonResponse<'/api/intents/{intent_id}', 'patch'>
 export type CancelIntentResponse = JsonResponse<'/api/intents/{intent_id}', 'delete'>
 
+export type MatchListResponse = JsonResponse<'/api/intents/{intent_id}/matches', 'get'>
+export type MatchDetailResponse = JsonResponse<'/api/matches/{match_id}', 'get'>
+
+export type NegotiationListResponse = JsonResponse<'/api/negotiations', 'get'>
+export type NegotiationStateResponse = JsonResponse<'/api/negotiations/{negotiation_id}', 'get'>
+
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
 
@@ -224,4 +230,35 @@ export const api = {
     request<CancelIntentResponse>(`/api/intents/${id}`, {
       method: 'DELETE',
     }),
+
+  intentMatches: (
+    intentId: string,
+    params?: { limit?: number; offset?: number; min_score?: number },
+  ) => {
+    const queryString = params
+      ? '?' +
+        new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)]),
+        ).toString()
+      : ''
+    return request<MatchListResponse>(`/api/intents/${intentId}/matches${queryString}`)
+  },
+
+  matchGet: (id: string) => request<MatchDetailResponse>(`/api/matches/${id}`),
+
+  negotiationsList: (params?: { status?: string; limit?: number; offset?: number }) => {
+    const queryString = params
+      ? '?' +
+        new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)]),
+        ).toString()
+      : ''
+    return request<NegotiationListResponse>(`/api/negotiations${queryString}`)
+  },
+
+  negotiationGet: (id: string) => request<NegotiationStateResponse>(`/api/negotiations/${id}`),
 }

@@ -791,3 +791,45 @@ Verifica:
 - `npm run lint` verde.
 - `npm run build` verde.
 - Live smoke su `http://127.0.0.1:3000` HTTP `200`, copy aggiornata presente nell'HTML.
+
+---
+
+## FASE 10.1.3 — Match view + negotiation read-only — 2026-05-03
+
+### Implementazione
+
+- Aggiunti client API read-only per:
+  - `GET /api/intents/{intent_id}/matches`
+  - `GET /api/matches/{match_id}`
+  - `GET /api/negotiations`
+  - `GET /api/negotiations/{negotiation_id}`
+- Aggiunti query hooks:
+  - `useIntentMatches`
+  - `useMatchDetail`
+  - `useNegotiations`
+  - `useNegotiation`
+- Nuove route frontend:
+  - `/matches`: match feed raggruppato per intent.
+  - `/matches/[id]`: dettaglio read-only buy/sell intent + score.
+  - `/negotiations`: lista negoziazioni con filtri status.
+  - `/negotiations/[id]`: transcript read-only dei turni offerta/counter/accept/reject.
+- Dashboard aggiornato con entrypoint a Intent, Match, Negoziati.
+- Layout Intent/Match/Negoziati allineati con nav interna.
+- Formatting condiviso in `marketplace-format.ts`.
+
+### Verifica
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run build
+npx prettier --check 'src/app/(app)/dashboard/page.tsx' 'src/app/(app)/intents/layout.tsx' 'src/app/(app)/matches/layout.tsx' 'src/app/(app)/matches/page.tsx' 'src/app/(app)/matches/[id]/page.tsx' 'src/app/(app)/negotiations/layout.tsx' 'src/app/(app)/negotiations/page.tsx' 'src/app/(app)/negotiations/[id]/page.tsx' src/lib/api-client.ts src/lib/intent-queries.ts src/lib/marketplace-format.ts src/lib/match-queries.ts src/lib/negotiation-queries.ts
+```
+
+Risultati:
+
+- TypeScript verde.
+- Lint verde.
+- Build verde.
+- Prettier check verde sui file code toccati.
+- Live dev server `3000`: dopo `next build` mentre `next dev` era gia acceso, le nuove route rispondono 500 per cache `.next` corrotta (`Cannot find module './948.js'` / vendor chunk missing). Stesso failure mode gia visto in 10.1.2. Serve restart dev server o clear `.next`; non e type/build regression.
