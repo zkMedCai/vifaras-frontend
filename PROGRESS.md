@@ -898,13 +898,18 @@ Risultati:
   - price relationship SELL: target >= minimo;
   - price relationship BUY: target <= massimo;
   - missing fields dalla bozza mostrati in review.
+- Refinement conversazionale:
+  - la bozza AI non apre piu automaticamente il form strutturato;
+  - la risposta agente appare nello stesso riquadro del composer;
+  - se mancano campi, l'agente fa una domanda singola in stile intervista;
+  - la risposta successiva aggiorna la bozza mantenendo il contesto gia estratto;
+  - il form dettagli resta accessibile solo via `Modifica dettagli` o `Compila manualmente`.
 
 ### Verifica
 
 ```bash
 npx tsc --noEmit
 npm run lint
-npm run build
 curl -sS -o /tmp/vifaras_intents_new.html -w "%{http_code}" -m 5 http://127.0.0.1:3000/intents/new
 ```
 
@@ -912,8 +917,6 @@ Risultati:
 
 - TypeScript verde.
 - Lint verde.
-- Build verde.
-- Live dev server `3000` risponde `500` per cache `.next` corrotta dopo
-  `next build` mentre `next dev` era gia acceso (`Cannot find module
-  './948.js'`). E' lo stesso failure mode gia visto in 10.1.3; serve restart
-  frontend dev server o clear `.next`.
+- Build non rieseguita durante `next dev` attivo per evitare la stessa
+  corruzione cache `.next` gia vista in 10.1.3.
+- Live smoke `/intents/new` HTTP `200`.

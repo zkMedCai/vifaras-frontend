@@ -139,6 +139,146 @@ function missingLabel(field: string): string {
   }
 }
 
+function sideLabel(side: string | null): string {
+  if (side === 'sell') {
+    return 'Vendo'
+  }
+  if (side === 'buy') {
+    return 'Compro'
+  }
+  return 'Operazione da completare'
+}
+
+function euroLabel(value: number): string {
+  if (!value) {
+    return 'da completare'
+  }
+  return `€${value.toLocaleString('it-IT')}`
+}
+
+function priceSummary(state: ReturnType<typeof useIntentStore.getState>): string {
+  if (state.side === 'sell') {
+    return `target ${euroLabel(state.idealPriceEur)}, minimo ${euroLabel(
+      state.reservationPriceEur,
+    )}`
+  }
+  if (state.side === 'buy') {
+    return `target ${euroLabel(state.idealPriceEur)}, massimo ${euroLabel(
+      state.reservationPriceEur,
+    )}`
+  }
+  return `target ${euroLabel(state.idealPriceEur)}, limite ${euroLabel(state.reservationPriceEur)}`
+}
+
+function locationSummary(state: ReturnType<typeof useIntentStore.getState>): string {
+  if (!state.locationCity) {
+    return 'nessuna città vincolante'
+  }
+  return `${state.locationCity}, ${state.locationCountry}`
+}
+
+function isDraftFieldResolved(
+  field: string,
+  state: ReturnType<typeof useIntentStore.getState>,
+): boolean {
+  switch (field) {
+    case 'side':
+      return state.side === 'buy' || state.side === 'sell'
+    case 'title':
+      return Boolean(state.title.trim())
+    case 'category':
+      return Boolean(state.category)
+    case 'reservation_price_eur':
+      return state.reservationPriceEur > 0
+    case 'ideal_price_eur':
+      return state.idealPriceEur > 0
+    default:
+      return false
+  }
+}
+
+function questionForField(
+  field: string,
+  state: ReturnType<typeof useIntentStore.getState>,
+): string {
+  switch (field) {
+    case 'side':
+      return 'Vuoi comprare o vendere?'
+    case 'title':
+      return 'Come lo chiameresti in bacheca?'
+    case 'category':
+      return 'Che tipo di prodotto o servizio è?'
+    case 'reservation_price_eur':
+      return state.side === 'sell'
+        ? 'Qual è il prezzo minimo sotto cui non vuoi scendere?'
+        : 'Qual è il massimo che vuoi pagare?'
+    case 'ideal_price_eur':
+      return state.side === 'sell'
+        ? 'A che prezzo vorresti venderlo idealmente?'
+        : 'A che prezzo vorresti comprarlo idealmente?'
+    default:
+      return `Mi serve questo dettaglio: ${missingLabel(field)}.`
+  }
+}
+
+function questionForValidation(
+  error: UxError | null,
+  state: ReturnType<typeof useIntentStore.getState>,
+): string | null {
+  if (!error) {
+    return null
+  }
+  if (!error.field) {
+    return error.message
+  }
+  if (
+    ['side', 'title', 'category', 'reservation_price_eur', 'ideal_price_eur'].includes(error.field)
+  ) {
+    return questionForField(error.field, state)
+  }
+  if (error.field === 'reservationPriceEur') {
+    return questionForField('reservation_price_eur', state)
+  }
+  if (error.field === 'idealPriceEur') {
+    return questionForField('ideal_price_eur', state)
+  }
+  return error.message
+}
+
+function compactDraftContext(state: ReturnType<typeof useIntentStore.getState>): string {
+  return JSON.stringify({
+    side: state.side,
+    title: state.title,
+    description: state.description.slice(0, 500),
+    category: state.category,
+    reservation_price_eur: state.reservationPriceEur || null,
+    ideal_price_eur: state.idealPriceEur || null,
+    duration_days: state.durationDays,
+    hard_constraints: state.locationCity
+      ? { location: `${state.locationCity.trim()}, ${state.locationCountry}` }
+      : {},
+  })
+}
+
+function buildDraftPrompt(
+  userMessage: string,
+  state: ReturnType<typeof useIntentStore.getState>,
+  draft: NaturalIntentDraftResponse | null,
+): string {
+  if (!draft) {
+    return userMessage
+  }
+
+  const context = compactDraftContext(state)
+  const prefix = [
+    'Aggiorna questa bozza di intent marketplace mantenendo i dati esistenti se il nuovo messaggio non li cambia.',
+    `Bozza attuale: ${context}`,
+    'Nuovo messaggio utente:',
+  ].join('\n')
+  const maxUserMessageLength = Math.max(200, 1950 - prefix.length)
+  return `${prefix}\n${userMessage.slice(0, maxUserMessageLength)}`
+}
+
 export default function IntentNewPage() {
   const router = useRouter()
   const store = useIntentStore()
@@ -146,7 +286,7 @@ export default function IntentNewPage() {
   const createIntent = useCreateIntent()
   const draftIntent = useDraftIntentFromText()
   const [prompt, setPrompt] = useState('')
-  const [reviewVisible, setReviewVisible] = useState(false)
+  const [detailsVisible, setDetailsVisible] = useState(false)
   const [draftResult, setDraftResult] = useState<NaturalIntentDraftResponse | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -170,7 +310,7 @@ export default function IntentNewPage() {
       locationCountry: country,
     })
     setDraftResult(draft)
-    setReviewVisible(true)
+    setDetailsVisible(false)
     setValidationError(null)
     setSubmitError(null)
   }
@@ -178,13 +318,19 @@ export default function IntentNewPage() {
   const handleDraft = async () => {
     const cleanPrompt = prompt.trim()
     setDraftError(null)
-    if (cleanPrompt.length < 10) {
+    if (!draftResult && cleanPrompt.length < 10) {
       setDraftError('Scrivi almeno una frase.')
       return
     }
+    if (draftResult && cleanPrompt.length < 2) {
+      setDraftError("Scrivi una risposta per l'agente.")
+      return
+    }
     try {
-      const draft = await draftIntent.mutateAsync({ prompt: cleanPrompt })
+      const draftPrompt = buildDraftPrompt(cleanPrompt, store, draftResult)
+      const draft = await draftIntent.mutateAsync({ prompt: draftPrompt })
       applyDraft(draft)
+      setPrompt('')
     } catch (err) {
       setDraftError(mapDraftError(err))
       console.error('Intent draft failed:', err)
@@ -239,6 +385,25 @@ export default function IntentNewPage() {
     store.side === 'sell'
       ? "Sotto questo valore l'agente rifiuta automaticamente"
       : "Sopra questo valore l'agente rifiuta automaticamente"
+  const missingFields =
+    draftResult?.missing_fields.filter((field) => !isDraftFieldResolved(field, store)) ?? []
+  const interviewQuestion =
+    questionForValidation(validationError, store) ??
+    (missingFields.length > 0 ? questionForField(missingFields[0], store) : null)
+  const composerPlaceholder = interviewQuestion
+    ? interviewQuestion
+    : draftResult
+      ? 'Scrivi una correzione, es: cambia il target a 720 euro e limita a Milano.'
+      : 'Voglio vendere una bici da corsa taglia M a Roma, minimo 600 euro, target 750, ritiro a mano.'
+  const draftButtonLabel = draftIntent.isPending
+    ? draftResult
+      ? 'Aggiornamento...'
+      : 'Preparazione...'
+    : draftResult
+      ? interviewQuestion
+        ? 'Invia risposta'
+        : 'Aggiorna bozza'
+      : 'Prepara bozza'
 
   return (
     <div className="mx-auto max-w-4xl p-6">
@@ -255,7 +420,7 @@ export default function IntentNewPage() {
             <button
               type="button"
               onClick={() => {
-                setReviewVisible(true)
+                setDetailsVisible(true)
                 setDraftResult(null)
               }}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"
@@ -269,7 +434,7 @@ export default function IntentNewPage() {
             onChange={(event) => setPrompt(event.target.value)}
             maxLength={2000}
             rows={5}
-            placeholder="Voglio vendere una bici da corsa taglia M a Roma, minimo 600 euro, target 750, ritiro a mano."
+            placeholder={composerPlaceholder}
             className="mt-5 w-full rounded-lg border border-gray-300 px-3 py-3 text-base focus:border-blue-500 focus:outline-none"
           />
           <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -280,7 +445,7 @@ export default function IntentNewPage() {
               disabled={draftIntent.isPending}
               className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
-              {draftIntent.isPending ? 'Preparazione...' : 'Prepara bozza'}
+              {draftButtonLabel}
             </button>
           </div>
           {draftError && (
@@ -288,13 +453,106 @@ export default function IntentNewPage() {
               {draftError}
             </div>
           )}
+
+          {draftResult && (
+            <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase text-blue-700">Agente Vifaras</p>
+                  <h2 className="mt-1 text-lg font-semibold text-gray-950">
+                    {interviewQuestion ? 'Ti faccio una domanda.' : 'Ho preparato questo intent.'}
+                  </h2>
+                  <p className="mt-2 text-sm text-gray-700">
+                    {interviewQuestion ||
+                      draftResult.summary ||
+                      'Lo posso pubblicare così o puoi correggere i dettagli prima.'}
+                  </p>
+                </div>
+                <div className="text-sm text-blue-900 md:text-right">
+                  <p>{Math.round((draftResult.confidence ?? 0) * 100)}% confidenza</p>
+                  <p>{getCategoryLabel(store.category)}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-blue-100 bg-white p-4">
+                <p className="text-base font-semibold text-gray-950">
+                  {sideLabel(store.side)}: {store.title || 'titolo da completare'}
+                </p>
+                {store.description && (
+                  <p className="mt-2 text-sm leading-6 text-gray-700">{store.description}</p>
+                )}
+                <div className="mt-4 grid gap-3 text-sm text-gray-700 md:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-gray-500">Prezzo</p>
+                    <p className="mt-1 font-medium text-gray-950">{priceSummary(store)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-gray-500">Durata</p>
+                    <p className="mt-1 font-medium text-gray-950">{store.durationDays} giorni</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-gray-500">Zona</p>
+                    <p className="mt-1 font-medium text-gray-950">{locationSummary(store)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {missingFields.length > 0 && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Mi manca ancora: {missingFields.map(missingLabel).join(', ')}.
+                </div>
+              )}
+
+              {validationError && (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  {validationError.message}
+                </div>
+              )}
+
+              {submitError && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-800">
+                  {submitError}
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setDetailsVisible(true)}
+                  disabled={isBusy}
+                  className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-800 hover:bg-blue-50 disabled:opacity-50"
+                >
+                  Modifica dettagli
+                </button>
+                {missingFields.length > 0 || validationError ? (
+                  <button
+                    type="button"
+                    onClick={handleDraft}
+                    disabled={isBusy}
+                    className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {draftIntent.isPending ? 'Aggiornamento...' : 'Invia risposta'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={isBusy}
+                    className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {createIntent.isPending ? 'Pubblicazione...' : 'Pubblica intent'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
-        {reviewVisible && (
+        {detailsVisible && (
           <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-3 border-b border-gray-100 pb-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase text-gray-500">Review intent</p>
+                <p className="text-xs font-semibold uppercase text-gray-500">Dettagli intent</p>
                 <h2 className="mt-1 text-xl font-semibold text-gray-950">
                   {store.title || 'Bozza intent'}
                 </h2>
@@ -310,9 +568,9 @@ export default function IntentNewPage() {
               )}
             </div>
 
-            {draftResult && draftResult.missing_fields.length > 0 && (
+            {missingFields.length > 0 && (
               <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                Completa: {draftResult.missing_fields.map(missingLabel).join(', ')}.
+                Completa: {missingFields.map(missingLabel).join(', ')}.
               </div>
             )}
 
