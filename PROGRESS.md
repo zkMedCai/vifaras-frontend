@@ -728,7 +728,7 @@ Discovery batch (8):
 5. Toast component shared cross-flow (V0.5+ UX polish)
 6. Backend `duration_days` field expose (avoid client recompute drift)
 7. Public deals feed: trust signal + marketing surface (V0.5+ post-launch, design originale 2026-04-29)
-8. AI gateway / BYOK provider linking pattern (V1.5+ Anthropic OAuth primary, V2 OpenAI quando matures, brief 2.8 cross-reference)
+8. AI gateway / compliant BYOK provider pattern (V0.5+/V1+ API key or connector only; no consumer OAuth)
 
 Hotfix-specific batch (5):
 
@@ -759,9 +759,15 @@ Cattura completa in IDEAS_BACKLOG separate entry.
 
 `v0-frontend-intent-crud` (post bundle commit S2)
 
+### Post-10.2 architecture correction
+
+Discovery FASE 10.2 (2026-05-03) ha confermato Path A: V0 platform-managed AI. Vifaras usa account API propri Anthropic/OpenAI; niente Claude Pro/Max OAuth, niente ChatGPT Plus/Pro come motore marketplace. BYOK API key, connector locale e MCP pubblico sono V0.5+/V1+ solo se compliant.
+
+Impatto frontend: non costruire Settings "Connetti Claude/OpenAI" per V0. Il copy deve dire AI inclusa con fair-use/cap, non "porta il tuo motore AI".
+
 ### Next
 
-[10.1.2.5] Conversational intake — textarea libera + Claude API parsing. Prerequisite Anthropic API key (platform-managed V0).
+[10.1.2.5] Conversational intake — textarea libera + Claude API parsing. Prerequisite Anthropic API key platform-managed V0.
 
 OR
 

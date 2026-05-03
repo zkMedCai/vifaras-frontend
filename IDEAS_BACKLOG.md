@@ -496,25 +496,25 @@ V0 frontend cancelIntent niente displaya counters all'utente (decisione S2 [10.1
 
 ---
 
-### PROJECT_BRIEF v1.3 → v2.0 update post-pivot V0 AI-only (CRITICAL pre-FASE 10.2)
+### PROJECT_BRIEF v1.3 → v2.0 update post-F10.2 platform-managed AI decision (CRITICAL pre-launch)
 
-**Trigger**: prima di iniziare FASE 10.2 implementation (provider linking).
+**Trigger**: prima di launch alpha o di nuova implementazione onboarding/monetization.
 
-**Background**: Pivot decision 2026-05-03 (FASE 10.1.2 S3 closure) ribalta architettura V0 da platform-managed a AI-only OpenCode-style. PROJECT_BRIEF v1.3 multiple sections superseded.
+**Background**: Discovery 2026-05-03 (FASE 10.2) ha invalidato il piano "utente collega subscription consumer AI". V0 resta platform-managed AI: Vifaras usa account API propri Anthropic/OpenAI, con cap/costi controllati. PROJECT_BRIEF v1.3 multiple sections need refresh.
 
 Decisioni LOCKED in `marketplace/SPEC_V0.md`:
-- §2.5 Onboarding flow (signup → identity → AI link → mandate → Tier 2)
-- §2.8 Provider linking (V0 prerequisite, niente più V1.5+ optional)
-- §3.1 USP (marketplace agent-native, porta tuo motore AI)
-- §4.3 Audience (tech-aware AI-native users IT)
-- §6.4 Take rate (5% seller-only, era 8% blended)
+- §2.5 Onboarding flow (signup → identity → mandate → Tier 2; niente AI link V0)
+- §2.8 Provider linking (consumer OAuth rimosso; BYOK/connector solo V0.5+/V1+ compliant)
+- §3.1 USP ("crea il tuo agente di compravendita in 2 minuti")
+- §4.3 Audience (consumer marketplace IT; power users future segment)
+- §6.4 Monetization (seller fee + AI credits/subscription guardrails)
 
 **Action V0.5+ pre-launch**:
 
 - Riscrivere PROJECT_BRIEF sezioni 2.5, 2.8, 3.1, 4.3, 6.4
-- Update §4.1 TAM/SAM/SOM (ricalibrare ~80-300K total IT vs milioni Vinted)
-- Update §8 GTM (canali tech-aware: r/LocalLLaMA, Hacker News, X tech-AI)
-- Update §11 Financial projections (revenue Anno 1 ~€2-7K, break-even Anno 2)
+- Update §4.1 TAM/SAM/SOM (consumer marketplace, non BYOK-only)
+- Update §8 GTM (consumer trust + privacy + agent convenience)
+- Update §11 Financial projections (include LLM variable cost, caps, credits)
 - Bump version v1.3 → v2.0
 - Update CHANGELOG
 
@@ -526,13 +526,13 @@ Decisioni LOCKED in `marketplace/SPEC_V0.md`:
 
 ### Connector app per AI locale (V0.5+ post-launch traction-driven)
 
-**Trigger**: V0.5+ post-launch se feedback PMF rivela demand power user "voglio Ollama/LM Studio" o se cloud OAuth provider (Anthropic) cambia TOS.
+**Trigger**: V0.5+ post-launch se feedback PMF rivela demand power user "voglio Ollama/LM Studio" o se costi LLM platform richiedono BYOK/local offload.
 
-**Background**: V0 X2 supporta Anthropic OAuth + OpenAI API key (cloud-only). Connector locale per Ollama/LM Studio/LocalAI è SKIP V0 per scope discipline. Audience power user (~50-200K IT 2026) escluse V0 alpha.
+**Background**: V0 platform-managed AI usa account API Vifaras. Connector locale per Ollama/LM Studio/LocalAI è SKIP V0 per scope discipline. Audience power user esclusa dal critical path alpha.
 
 Pattern: utente installa app desktop standalone (Tauri o Electron o Python CLI) che bridge Vifaras backend ↔ Ollama/LM Studio endpoint locale. Marketplace manda compito al connector, connector usa AI dell'utente, ritorna risposta.
 
-**Vantaggio**: Vifaras niente paga LLM, supporto AI locali (privacy++ + cost++).
+**Vantaggio**: opzione BYOK/local compliant, Vifaras può ridurre costi LLM, supporto AI locali (privacy++ + cost++).
 **Svantaggio**: PC user spento → agente in pausa (a meno cloud direct linked).
 
 **Action V0.5+**:
@@ -547,4 +547,4 @@ Pattern: utente installa app desktop standalone (Tauri o Electron o Python CLI) 
 
 **Effort**: 3-6 weeks dedicated dev (significant standalone codebase).
 
-**Cross-reference**: `marketplace/SPEC_V0.md` §6.2. OpenCode local providers (sst.dev/opencode/docs/providers).
+**Cross-reference**: `marketplace/SPEC_V0.md` §6.3.
