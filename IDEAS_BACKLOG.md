@@ -277,3 +277,274 @@ V0 acceptable workaround:
 **Effort**: 2-3 ore (audit + fix + test deterministic).
 
 **Cross-reference**: questa entry è specifica manifestation del bug catalogato in pre-existing entry "TZ-naive datetime audit (V0.5+ pre-launch)" da FASE 7.4 IDEAS_BACKLOG (backend repo).
+
+---
+
+### Backend categories localized labels endpoint (V0.5+ pre-launch i18n preparation)
+
+**Trigger**: V0.5+ pre-launch quando arriva traduzione multilingua oltre italiano (Spagnolo per espansione Wallapop secondo business plan).
+
+**Background**: V0 frontend hardcoda IT labels in `src/lib/intent-categories.ts` (22 labels + 6 GROUPS). Backend espone solo slug enum (`electronics_audio`, `sport_bicycles`, ecc.). Pattern niente scala se aggiungi paesi: serve fork frontend per ogni lingua.
+
+**Action V0.5+**:
+
+- Backend endpoint `GET /api/categories?lang=it` ritorna `[{slug, label, group_slug, group_label}, ...]` localized
+- Frontend caches via TanStack Query, invalidates on lang change
+- Rimozione hardcoded labels in `intent-categories.ts`, sostituiti da query
+- Locale switching prep V0.5+ (footer language picker)
+
+**Effort**: 3-4h (backend endpoint + frontend refactor + cache strategy).
+
+---
+
+### UX warning intent price > mandate cap (V0.5+ cross-tier guidance)
+
+**Trigger**: V0.5+ pre-launch UX polish quando user feedback rivela confusione tra `mandate.max_per_deal_eur` cap e `intent.ideal_price_eur`.
+
+**Background**: V0 niente warning frontend se user crea intent con `ideal_price_eur > mandate.max_per_deal_eur`. Risultato: agent niente potrà mai chiudere deal a quel prezzo (mandate verifier rifiuta), user confuso.
+
+**Action V0.5+**:
+
+- Frontend create form: dopo input prezzi, fetch `mandate.max_per_deal_eur`
+- Se `ideal > cap`: warning yellow inline "Il tuo mandate consente max €{cap}/deal. L'agente potrà chiudere solo sotto questa soglia"
+- CTA secondario "Aumenta cap mandate" → step-up flow per modificare mandate
+- Edit form analogo
+
+**Effort**: 4-6h (UX design + frontend integration + mandate query).
+
+---
+
+### Backend `hard_constraints` schema typed model (V0.5+ pre-launch)
+
+**Trigger**: V0.5+ pre-launch quando aggiungi nuovi `hard_constraints` field oltre `location` (es. `condition`, `min_year`, `category_subtype`).
+
+**Background**: V0 `hard_constraints` è `dict[str, Any]` Pydantic raw. Validazione solo regex su `location` field. Schema niente esposto in OpenAPI types, niente strict validation server-side.
+
+**Action V0.5+**:
+
+- Backend Pydantic typed model `HardConstraints`: `location: str | None`, `condition: Literal[...] | None`, eventuali altri
+- Validazione strict: regex location, enum condition, etc.
+- OpenAPI types auto-generate frontend type-safe
+- Migration backward-compatible (existing intents con dict generico restano valid via Union type)
+
+**Effort**: 4-6h (schema design + migration + tests).
+
+---
+
+### Backend `soft_preferences` UX design pattern (V0.5+ pre-launch)
+
+**Trigger**: V0.5+ pre-launch quando aggiungi UX `soft_preferences` editing al form (V0 SKIP per scope discipline).
+
+**Background**: V0 `soft_preferences` accetta dict generico backend, frontend SKIP completamente (niente field UI). Memoria S1 [10.1.2.2.0] decision H. Backend embedding niente usa `soft_preferences` per matching, è pure pass-through display.
+
+**Action V0.5+**:
+
+- UX design: chips multi-select? Free text tags? Slider weights?
+- Backend schema typed model `SoftPreferences` (parallelo a hard_constraints)
+- Frontend create/edit forms add field
+- Match service eventualmente weights soft preferences in similarity score (FASE 10.1.3+)
+
+**Effort**: 6-10h (UX design + schema + frontend + match integration).
+
+---
+
+### Toast component shared cross-flow (V0.5+ UX polish)
+
+**Trigger**: V0.5+ pre-launch UX polish per success/error notifications consistent.
+
+**Background**: V0 frontend niente ha toast/snackbar component. UX feedback fatto via inline error messages in form OR redirect post-action. Pattern niente uniforme cross-pages.
+
+**Action V0.5+**:
+
+- Implement toast component shared (es. `src/components/ui/toast.tsx`)
+- Hook `useToast()` con queue + auto-dismiss + variant (success/error/info)
+- Replace inline error displays nei form con toast invocations
+- Use cases: intent created (success), mandate revoked (info), deal cancelled (info), errors generic
+
+**Effort**: 4-6h (component design + hook + integration cross-pages).
+
+---
+
+### Backend `duration_days` field expose (V0.5+ pre-launch — avoid client recompute drift)
+
+**Trigger**: V0.5+ pre-launch quando refactor edit form per consistency.
+
+**Background**: V0 backend ritorna solo `expires_at` + `created_at` su `IntentResponse`. Frontend recompute `durationDays = (expires_at - created_at) / 86_400_000 ms` (memoria S2 [10.1.2.2.0] discovery calibration #3). Floating-point arithmetic potential drift edge cases (es. intent created during DST transition).
+
+**Action V0.5+**:
+
+- Backend `IntentResponse` add field `duration_days: int` derived server-side
+- Frontend rimozione recompute, lettura diretta da response
+- Backward-compatible: frontend type-safe, niente breaking change
+
+**Effort**: 1-2h (backend schema update + frontend simplify + tests).
+
+---
+
+### Public deals feed: trust signal + marketing surface (V0.5+ post-launch)
+
+**Trigger**: V0.5+ post-launch quando hai liquidità reale (100+ deal storici).
+
+**Background**: V0 architettura backend ha deal storici in DB (FASE 5+ negotiation closure). Frontend FASE 10.1.x track focus su user-private flow (own intents, own matches, own deals). Niente surface pubblica deal completati platform-wide.
+
+Discusso architetturalmente in design originale Vifaras (29 aprile 2026) come "Live feed del mercato" component frontend. Non implementato in V0 — incompatibile con priority "end-to-end product demo" + contesto "niente liquidità reale pre-launch".
+
+**Compatibility checks**:
+
+- ✅ Compatibile con Opzione X privacy (deal completati = fact storici, prezzi finali post-negotiation, niente intent attivi)
+- ✅ Compatibile con GDPR (display "Roma → Milano" geo, niente nomi user)
+- ✅ Compatibile con backend FASE 7 schema (deal table queryable, soft anonymization via location regex)
+- ✅ Niente conflict con principle 2 "agenti niente browse" (questo è UMANO che vede storia, non agente AI in negoziazione)
+
+**Action V0.5+ post-launch**:
+
+- Backend endpoint `GET /api/deals/public-feed` paginated, anonymized
+- Display fields: category, side (buy/sell), final_price_eur, geo (city → city), negotiation_rounds, time_ago
+- Hide fields: user_id, agent_id, intent description, message content
+- Frontend route `/explore` o `/feed` (loggati o pubblico, decisione UX V0.5+)
+- Aggregate stats top: "Oggi: N deal · €X movimentati"
+- Filter optional: category, geo
+
+**Effort**: 6-10 ore (backend endpoint + anonymization layer + frontend page + UX polish).
+
+**Cross-references**: design discussion 2026-04-29 (Frontend Next.js architecture). Privacy locked decision: Opzione X (transcript 2026-04-30). Trust signal pattern: Stripe homepage live counter, Booking.com social proof, Hyperliquid leaderboard.
+
+---
+
+### `AuthBootstrap` selective refresh-on-mount (V0.5+ session economy)
+
+**Trigger**: V0.5+ session economy refinement quando V0 alpha rivela costi refresh-token churn elevati.
+
+**Background**: V0 `AuthBootstrap` providers.tsx ([10.1.1.7.2] hotfix) consume refresh-on-mount IF refreshToken presente, indipendentemente da access_token validity. Pattern spreca refresh tokens utili: refresh consume vecchio refresh + emit nuovo, anche quando access ancora valido per 14 minuti.
+
+Costo backend: rotation table write + new JWT signing per ogni mount root provider (= ogni page reload).
+
+**Action V0.5+**:
+
+- Decode access_token JWT exp claim al mount
+- Refresh ONLY if `now > exp - buffer` (es. 60s buffer pre-expiry)
+- Niente refresh se access valido
+- Pattern adottato in maturità: Auth0, Clerk, Supabase Auth all selective refresh
+
+**Effort**: 1-2h (jwt-decode helper + AuthBootstrap conditional logic + tests).
+
+**Cross-references**: hotfix [10.1.1.7.2] AuthBootstrap 401-soft path. Hotfix [10.1.2.2.4.1] 401-retry interceptor api-client.ts (separate layer, complementary).
+
+---
+
+### Backend FastAPI middleware order: CORS bypass on 5xx exception (V0.5+ pre-launch)
+
+**Trigger**: V0.5+ pre-launch hardening quando user-facing error UX matters.
+
+**Background**: V0 [10.1.2.2.4.2] smoke verify ha rivelato classico FastAPI bug: 500 exception bypass CORS middleware → response niente carry `Access-Control-Allow-Origin` header → browser block fetch with `net::ERR_FAILED`. User vede generic "Failed to fetch" niente backend error message.
+
+ExceptionMiddleware runs OUTSIDE CORSMiddleware in default FastAPI middleware stack.
+
+**Action V0.5+**:
+
+- Custom exception handler che ensures CORS headers on errors
+- Pattern: `@app.exception_handler(Exception)` → response include CORS headers manually
+- Verify across: 500 (server error), 503 (service unavailable), 422 (validation), 401 (auth)
+- E2E test: mock backend exception, frontend sees JSON body con error code
+
+**Effort**: 2-3h (custom handler + middleware order verify + E2E tests).
+
+**Cross-reference**: hotfix [10.1.2.2.4.2] EMBEDDING_BACKEND=fake (manifested 500 → CORS bypass).
+
+---
+
+### Backend immutable fields strict vs PATCH partial-update tolerant (V0.5+ design choice)
+
+**Trigger**: V0.5+ design choice review quando frontend complexity da client-side omit cresce.
+
+**Background**: V0 [10.1.2.2.4.3] catch: backend `update_intent` rejecta `category` e `side` come IMMUTABLE post-create anche se valori invariati (raise CategoryNotModifiable / SideNotModifiable, http_status=422). Frontend hotfix: client-side omit immutable fields da PATCH body.
+
+Pattern niente Pydantic-friendly (PATCH dovrebbe essere partial-update tolerant a unchanged fields). Server-side enforcement è strictly correct ma fa carico a client.
+
+**Action V0.5+ refactor opzionale**:
+
+- **Option A**: backend tolerant — detect `input.category != current.category` → reject; else accept (idempotent semantics, ignore unchanged values)
+- **Option B**: backend OpenAPI `readOnly` marker su immutable fields → frontend type generation auto-omit
+- **Option C**: keep current strict + frontend continues client-side omit (current hotfix sufficient V0)
+
+**Effort**: 2-4h backend per option A/B. Option C zero-effort.
+
+**Decisione**: design-time architectural call. Effort A/B vale solo se altri PATCH endpoint hanno simile pattern (cancel_mandate? update_user_settings? V0.5+).
+
+**Cross-reference**: hotfix [10.1.2.2.4.3] edit form omit immutable. Discovery [10.1.2.2.0] niente verified update_intent field-level gating.
+
+---
+
+### Backend `cancel_intent` `CancelIntentResponse` counters niente verified empirically (V0.5+ UX)
+
+**Trigger**: V0.5+ UX polish quando toast component shared introdotto (entry separata).
+
+**Background**: V0 [10.1.2.2.4] smoke verify Step 13: DELETE /api/intents/{id} 200 OK confermato MA response body shape `{negotiations_cancelled, matches_expired}` counters niente verificati empiricamente (smoke verify procedette su GET response body). Backend `cancel_intent` working end-to-end (status='cancelled' + closed_at populated verified via subsequent GET), ma counters payload niente esercitato dal frontend.
+
+V0 frontend cancelIntent niente displaya counters all'utente (decisione S2 [10.1.2.2.0] toast SKIP V0).
+
+**Action V0.5+**:
+
+- Verify CancelIntentResponse shape via OpenAPI types check + manual smoke
+- Frontend toast: post-cancel show "Intent annullato. {negotiations_cancelled} negoziazioni in corso annullate, {matches_expired} match terminati."
+- Edge case: counters = 0 → toast generic "Intent annullato"
+- Catch: counters niente null edge cases
+
+**Effort**: 2-3h (verify shape + toast integration + tests).
+
+**Cross-reference**: hotfix N/A (counters separate feature). Toast component entry V0.5+ prerequisite.
+
+---
+
+### PROJECT_BRIEF v1.3 → v2.0 update post-pivot V0 AI-only (CRITICAL pre-FASE 10.2)
+
+**Trigger**: prima di iniziare FASE 10.2 implementation (provider linking).
+
+**Background**: Pivot decision 2026-05-03 (FASE 10.1.2 S3 closure) ribalta architettura V0 da platform-managed a AI-only OpenCode-style. PROJECT_BRIEF v1.3 multiple sections superseded.
+
+Decisioni LOCKED in `marketplace/SPEC_V0.md`:
+- §2.5 Onboarding flow (signup → identity → AI link → mandate → Tier 2)
+- §2.8 Provider linking (V0 prerequisite, niente più V1.5+ optional)
+- §3.1 USP (marketplace agent-native, porta tuo motore AI)
+- §4.3 Audience (tech-aware AI-native users IT)
+- §6.4 Take rate (5% seller-only, era 8% blended)
+
+**Action V0.5+ pre-launch**:
+
+- Riscrivere PROJECT_BRIEF sezioni 2.5, 2.8, 3.1, 4.3, 6.4
+- Update §4.1 TAM/SAM/SOM (ricalibrare ~80-300K total IT vs milioni Vinted)
+- Update §8 GTM (canali tech-aware: r/LocalLLaMA, Hacker News, X tech-AI)
+- Update §11 Financial projections (revenue Anno 1 ~€2-7K, break-even Anno 2)
+- Bump version v1.3 → v2.0
+- Update CHANGELOG
+
+**Effort**: 4-8h scrittura + 2h review.
+
+**Cross-reference**: `marketplace/SPEC_V0.md` (source of truth post-pivot decisions).
+
+---
+
+### Connector app per AI locale (V0.5+ post-launch traction-driven)
+
+**Trigger**: V0.5+ post-launch se feedback PMF rivela demand power user "voglio Ollama/LM Studio" o se cloud OAuth provider (Anthropic) cambia TOS.
+
+**Background**: V0 X2 supporta Anthropic OAuth + OpenAI API key (cloud-only). Connector locale per Ollama/LM Studio/LocalAI è SKIP V0 per scope discipline. Audience power user (~50-200K IT 2026) escluse V0 alpha.
+
+Pattern: utente installa app desktop standalone (Tauri o Electron o Python CLI) che bridge Vifaras backend ↔ Ollama/LM Studio endpoint locale. Marketplace manda compito al connector, connector usa AI dell'utente, ritorna risposta.
+
+**Vantaggio**: Vifaras niente paga LLM, supporto AI locali (privacy++ + cost++).
+**Svantaggio**: PC user spento → agente in pausa (a meno cloud direct linked).
+
+**Action V0.5+**:
+
+- Decidere stack: Tauri (Rust+WebView) vs Electron (Node) vs Python CLI tool
+- Distribution: GitHub releases? auto-update? signed binaries cross-OS?
+- OS support V0.5+: Linux + macOS + Windows priority
+- Connector lifetime: always-on daemon vs on-demand WebSocket
+- Protocol Vifaras backend ↔ connector: HTTPS polling vs WebSocket vs SSE
+- Local AI endpoint discovery: Ollama default :11434, LM Studio default :1234, LocalAI configurable
+- Authentication connector ↔ Vifaras: API token? mTLS? signed JWT?
+
+**Effort**: 3-6 weeks dedicated dev (significant standalone codebase).
+
+**Cross-reference**: `marketplace/SPEC_V0.md` §6.2. OpenCode local providers (sst.dev/opencode/docs/providers).
