@@ -774,3 +774,20 @@ OR
 [10.1.3] Match view + negotiation read-only — prerequisite `OPENAI_API_KEY` setup (V0 platform-managed).
 
 Decisione founder post-tag.
+
+---
+
+## FASE 10.2.4 — Fair-use copy alignment — 2026-05-03
+
+Backend FASE 10.2 ha confermato V0 platform-managed AI: niente Claude/OpenAI subscription linking per utenti consumer. Home page aggiornata per evitare promessa implicita di AI illimitata:
+
+- "Set your deal and AI-use limits"
+- "Vifaras-managed AI ... within fair-use caps"
+
+Scope intenzionale: copy-only, nessuna nuova Settings UI provider-linking V0.
+
+Verifica:
+
+- `npm run lint` verde.
+- `npm run build` verde.
+- Live smoke su `http://127.0.0.1:3000` HTTP `200`, copy aggiornata presente nell'HTML.
