@@ -904,6 +904,11 @@ Risultati:
   - se mancano campi, l'agente fa una domanda singola in stile intervista;
   - la risposta successiva aggiorna la bozza mantenendo il contesto gia estratto;
   - il form dettagli resta accessibile solo via `Modifica dettagli` o `Compila manualmente`.
+- Persona agente:
+  - nickname deterministico per la bozza (`Nora`, `Elia`, ecc.) basato su lato/categoria/titolo;
+  - ruolo visibile (`Agente vendita`, `Agente acquisti`, `Agente incarico`);
+  - card conversazionale con stato `Intervista` / `Incarico pronto`;
+  - copy orientato a incarico operativo, non a compilazione form.
 
 ### Verifica
 

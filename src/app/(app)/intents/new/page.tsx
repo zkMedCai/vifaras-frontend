@@ -14,6 +14,13 @@ interface UxError {
   message: string
 }
 
+interface AgentPersona {
+  name: string
+  role: string
+  initials: string
+  operatingLine: string
+}
+
 function validateClient(state: ReturnType<typeof useIntentStore.getState>): UxError | null {
   if (!state.title.trim()) {
     return { field: 'title', message: 'Il titolo è obbligatorio.' }
@@ -136,6 +143,58 @@ function missingLabel(field: string): string {
       return 'prezzo target'
     default:
       return field
+  }
+}
+
+function hashText(value: string): number {
+  return Array.from(value).reduce((acc, char) => acc + char.charCodeAt(0), 0)
+}
+
+function pickAgentName(
+  side: string | null | undefined,
+  category: string | null,
+  title: string,
+): string {
+  const seed = `${side ?? 'draft'}:${category ?? ''}:${title}`.trim()
+  const sellNames = ['Nora', 'Marta', 'Lia', 'Dario']
+  const buyNames = ['Elia', 'Sara', 'Luca', 'Vera']
+  const neutralNames = ['Vera', 'Elia', 'Nora', 'Lia']
+  const names = side === 'sell' ? sellNames : side === 'buy' ? buyNames : neutralNames
+  return names[hashText(seed) % names.length]
+}
+
+function agentPersona(
+  state: ReturnType<typeof useIntentStore.getState>,
+  nameOverride: string | null,
+): AgentPersona {
+  const name = nameOverride ?? pickAgentName(state.side, state.category, state.title)
+
+  if (state.side === 'sell') {
+    return {
+      name,
+      role: 'Agente vendita',
+      initials: name.slice(0, 2).toUpperCase(),
+      operatingLine:
+        'Cercherò controparti compatibili, difenderò il prezzo minimo e porterò avanti solo offerte coerenti.',
+    }
+  }
+
+  if (state.side === 'buy') {
+    return {
+      name,
+      role: 'Agente acquisti',
+      initials: name.slice(0, 2).toUpperCase(),
+      operatingLine:
+        'Cercherò offerte compatibili, rispetterò il budget massimo e scarterò proposte fuori incarico.',
+    }
+  }
+
+  return {
+    name,
+    role: 'Agente incarico',
+    initials: name.slice(0, 2).toUpperCase(),
+    operatingLine:
+      "Prima definisco l'incarico, poi posso cercare controparti e preparare la negoziazione.",
   }
 }
 
@@ -288,6 +347,7 @@ export default function IntentNewPage() {
   const [prompt, setPrompt] = useState('')
   const [detailsVisible, setDetailsVisible] = useState(false)
   const [draftResult, setDraftResult] = useState<NaturalIntentDraftResponse | null>(null)
+  const [agentName, setAgentName] = useState<string | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<UxError | null>(null)
@@ -310,6 +370,7 @@ export default function IntentNewPage() {
       locationCountry: country,
     })
     setDraftResult(draft)
+    setAgentName((current) => current ?? pickAgentName(draft.side, draft.category, draft.title))
     setDetailsVisible(false)
     setValidationError(null)
     setSubmitError(null)
@@ -390,6 +451,8 @@ export default function IntentNewPage() {
   const interviewQuestion =
     questionForValidation(validationError, store) ??
     (missingFields.length > 0 ? questionForField(missingFields[0], store) : null)
+  const persona = agentPersona(store, agentName)
+  const agentStatusLabel = interviewQuestion ? 'Intervista' : 'Incarico pronto'
   const composerPlaceholder = interviewQuestion
     ? interviewQuestion
     : draftResult
@@ -411,10 +474,10 @@ export default function IntentNewPage() {
         <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-950">Dai un incarico al tuo agente</h1>
+              <h1 className="text-2xl font-bold text-gray-950">Parla con il tuo agente</h1>
               <p className="mt-2 max-w-2xl text-sm text-gray-600">
-                Scrivi l&apos;obiettivo in modo naturale. La bozza resta modificabile prima della
-                pubblicazione.
+                Scrivi l&apos;obiettivo in modo naturale. L&apos;agente ti fa le domande essenziali
+                e prepara l&apos;incarico prima della pubblicazione.
               </p>
             </div>
             <button
@@ -422,6 +485,7 @@ export default function IntentNewPage() {
               onClick={() => {
                 setDetailsVisible(true)
                 setDraftResult(null)
+                setAgentName(null)
               }}
               className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium hover:bg-gray-50"
             >
@@ -457,25 +521,49 @@ export default function IntentNewPage() {
           {draftResult && (
             <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50 p-4">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-700 text-sm font-bold text-white">
+                    {persona.initials}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-blue-700">{persona.role}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-gray-950">
+                      Nickname: {persona.name}
+                    </p>
+                  </div>
+                </div>
+                <div className="md:text-right">
+                  <span className="inline-flex rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800">
+                    {agentStatusLabel}
+                  </span>
+                  <p className="mt-2 text-sm text-blue-900">
+                    {Math.round((draftResult.confidence ?? 0) * 100)}% confidenza
+                  </p>
+                  <p className="text-sm text-blue-900">{getCategoryLabel(store.category)}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border border-blue-100 bg-white p-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase text-blue-700">Agente Vifaras</p>
                   <h2 className="mt-1 text-lg font-semibold text-gray-950">
-                    {interviewQuestion ? 'Ti faccio una domanda.' : 'Ho preparato questo intent.'}
+                    {interviewQuestion
+                      ? `${persona.name} sta completando l'incarico.`
+                      : `${persona.name} ha preparato l'incarico.`}
                   </h2>
                   <p className="mt-2 text-sm text-gray-700">
                     {interviewQuestion ||
                       draftResult.summary ||
                       'Lo posso pubblicare così o puoi correggere i dettagli prima.'}
                   </p>
-                </div>
-                <div className="text-sm text-blue-900 md:text-right">
-                  <p>{Math.round((draftResult.confidence ?? 0) * 100)}% confidenza</p>
-                  <p>{getCategoryLabel(store.category)}</p>
+                  <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-950">
+                    {persona.operatingLine}
+                  </p>
                 </div>
               </div>
 
               <div className="mt-4 rounded-lg border border-blue-100 bg-white p-4">
-                <p className="text-base font-semibold text-gray-950">
+                <p className="text-xs font-semibold uppercase text-gray-500">Incarico proposto</p>
+                <p className="mt-1 text-base font-semibold text-gray-950">
                   {sideLabel(store.side)}: {store.title || 'titolo da completare'}
                 </p>
                 {store.description && (
