@@ -7,6 +7,7 @@ import {
   useCreateDealSignDraft,
   useDeal,
   useDealMessages,
+  useDealTradeWindow,
   useSendDealMessage,
   useSubmitDealSignature,
 } from '@/lib/deal-queries'
@@ -48,10 +49,50 @@ function randomNonceB64() {
   return bytesToBase64(nonce)
 }
 
+function asString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function asNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 function roleLabel(role: 'buyer' | 'seller' | null) {
   if (role === 'buyer') return 'compratore'
   if (role === 'seller') return 'venditore'
   return 'parte'
+}
+
+function nextActionLabel(action: string | undefined) {
+  const labels: Record<string, string> = {
+    seller_prepare_shipping: 'Preparare spedizione o consegna',
+    wait_for_seller_shipping: 'Attendere aggiornamento venditore',
+  }
+  return action ? labels[action] ?? action : 'In attesa'
+}
+
+function TimelineItem({
+  label,
+  state,
+}: {
+  label: string
+  state: 'done' | 'current' | 'pending'
+}) {
+  const markerClass =
+    state === 'done'
+      ? 'border-emerald-500 bg-emerald-500'
+      : state === 'current'
+        ? 'border-blue-600 bg-white'
+        : 'border-gray-300 bg-white'
+  const textClass =
+    state === 'done' ? 'text-gray-950' : state === 'current' ? 'text-blue-700' : 'text-gray-500'
+
+  return (
+    <li className="flex min-w-[150px] items-center gap-3">
+      <span className={`h-3 w-3 shrink-0 rounded-full border-2 ${markerClass}`} />
+      <span className={`text-sm font-medium ${textClass}`}>{label}</span>
+    </li>
+  )
 }
 
 function mapSignError(err: unknown) {
@@ -92,6 +133,7 @@ export default function DealDetailPage() {
   const { data, isLoading, error } = useDeal(dealId)
   const createDraft = useCreateDealSignDraft()
   const submitSignature = useSubmitDealSignature()
+  const tradeWindow = useDealTradeWindow(dealId, data?.status === 'confirmed')
   const messages = useDealMessages(dealId, data?.status === 'confirmed')
   const sendMessage = useSendDealMessage()
   const [uxError, setUxError] = useState<string | null>(null)
@@ -123,6 +165,13 @@ export default function DealDetailPage() {
     myRole === 'buyer' ? data.seller_signed_at : myRole === 'seller' ? data.buyer_signed_at : null
   const canSign = data.status === 'pending_signatures' && myRole !== null && !mySignedAt
   const isBusy = createDraft.isPending || submitSignature.isPending
+  const isConfirmed = data.status === 'confirmed'
+  const tradeTerms = tradeWindow.data?.terms_summary ?? {}
+  const tradeTitle =
+    asString(tradeTerms.sell_intent_title) ?? asString(tradeTerms.buy_intent_title) ?? 'Deal'
+  const tradeCategory = asString(tradeTerms.category) ?? 'Categoria non specificata'
+  const tradeDelivery = asString(tradeTerms.delivery) ?? 'Da coordinare'
+  const tradePriceCents = asNumber(tradeTerms.agreed_price_cents) ?? data.agreed_price_cents
 
   const handleSign = async () => {
     setUxError(null)
@@ -240,6 +289,18 @@ export default function DealDetailPage() {
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 className="text-lg font-semibold text-gray-950">Deal timeline</h2>
+        <ol className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <TimelineItem label="Accordo negoziato" state="done" />
+          <TimelineItem label="Seller signed" state={data.seller_signed_at ? 'done' : 'pending'} />
+          <TimelineItem label="Buyer signed" state={data.buyer_signed_at ? 'done' : 'pending'} />
+          <TimelineItem label="Deal confirmed" state={isConfirmed ? 'done' : 'pending'} />
+          <TimelineItem label="Trade Window" state={isConfirmed ? 'current' : 'pending'} />
+          <TimelineItem label="Completed" state="pending" />
+        </ol>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5">
         <h2 className="text-lg font-semibold text-gray-950">Dettagli accordo</h2>
         <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
           <div>
@@ -259,6 +320,90 @@ export default function DealDetailPage() {
             <dd className="mt-1 font-mono text-xs">{data.sell_intent_id}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-950">Trade Window</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              {isConfirmed
+                ? 'Finestra operativa aperta per coordinare consegna e completamento.'
+                : 'Si apre dopo la doppia firma passkey.'}
+            </p>
+          </div>
+          <span
+            className={`w-fit rounded-full border px-2.5 py-1 text-xs font-medium ${
+              isConfirmed
+                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                : 'border-gray-200 bg-gray-100 text-gray-700'
+            }`}
+          >
+            {isConfirmed ? 'Attiva' : 'Bloccata'}
+          </span>
+        </div>
+
+        {!isConfirmed ? (
+          <p className="mt-5 text-sm text-gray-600">
+            Prima servono le firme di compratore e venditore.
+          </p>
+        ) : tradeWindow.isLoading ? (
+          <p className="mt-5 text-sm text-gray-600">Caricamento Trade Window...</p>
+        ) : tradeWindow.error || !tradeWindow.data ? (
+          <p className="mt-5 text-sm font-semibold text-red-700">
+            Trade Window non disponibile.
+          </p>
+        ) : (
+          <div className="mt-5 space-y-5">
+            <dl className="grid gap-4 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-gray-500">Oggetto</dt>
+                <dd className="mt-1 font-semibold text-gray-950">{tradeTitle}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Categoria</dt>
+                <dd className="mt-1 font-semibold text-gray-950">{tradeCategory}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Prezzo accordato</dt>
+                <dd className="mt-1 font-semibold text-gray-950">
+                  {formatEuroCents(tradePriceCents)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Consegna</dt>
+                <dd className="mt-1 font-semibold text-gray-950">{tradeDelivery}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Confermata</dt>
+                <dd className="mt-1 font-semibold text-gray-950">
+                  {formatDateTime(tradeWindow.data.confirmed_at)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Prossima azione</dt>
+                <dd className="mt-1 font-semibold text-gray-950">
+                  {nextActionLabel(tradeWindow.data.next_required_action)}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="grid gap-3 text-sm sm:grid-cols-3">
+              <div className="border-l border-blue-200 pl-4">
+                <p className="font-semibold text-blue-700">Shipping pending</p>
+                <p className="mt-1 text-gray-600">Stato iniziale Trade Window.</p>
+              </div>
+              <div className="border-l border-gray-200 pl-4">
+                <p className="font-semibold text-gray-500">Shipped</p>
+                <p className="mt-1 text-gray-600">Placeholder logistico.</p>
+              </div>
+              <div className="border-l border-gray-200 pl-4">
+                <p className="font-semibold text-gray-500">Completed</p>
+                <p className="mt-1 text-gray-600">Chiusura futura del deal.</p>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-gray-200 bg-white p-5">

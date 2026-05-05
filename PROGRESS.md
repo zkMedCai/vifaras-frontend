@@ -1009,3 +1009,49 @@ Risultati:
 - Build verde.
 - Live route `/deals/<deal_id>` HTTP `200`.
 - E2E doppia firma buyer/seller: deal `confirmed`, chat API sbloccata.
+
+---
+
+## FASE 10.1.4.2 — Trade Window skeleton — 2026-05-05
+
+### Implementazione
+
+- `/deals/[id]` ora include una `Deal timeline`:
+  - accordo negoziato;
+  - seller signed;
+  - buyer signed;
+  - deal confirmed;
+  - Trade Window;
+  - completed.
+- Aggiunto pannello `Trade Window`:
+  - `Bloccata` finche il deal non e `confirmed`;
+  - `Attiva` dopo la doppia firma passkey.
+- Aggiunto client API typed per:
+  - `GET /api/deals/{deal_id}/trade-window`
+- Aggiunto hook `useDealTradeWindow`.
+- Il pannello mostra:
+  - summary oggetto/termini;
+  - prezzo accordato;
+  - consegna iniziale;
+  - `confirmed_at`;
+  - prossima azione logistica;
+  - step placeholder `Shipping pending`, `Shipped`, `Completed`.
+- La chat post-deal resta sotto la Trade Window come canale di
+  coordinamento.
+
+### Verifica
+
+```bash
+npm run api:types
+npx tsc --noEmit
+npm run lint
+npm run build
+git diff --check
+```
+
+Risultati:
+
+- OpenAPI types rigenerati dal backend locale aggiornato.
+- TypeScript verde.
+- Lint verde.
+- `git diff --check` verde.

@@ -166,6 +166,7 @@ export type DealDetailResponse = JsonResponse<'/api/deals/{deal_id}', 'get'>
 export type DealSignDraftResponse = JsonResponse<'/api/deals/{deal_id}/sign/draft', 'post'>
 export type DealSignSubmitRequest = JsonRequest<'/api/deals/{deal_id}/sign/submit', 'post'>
 export type DealSignSubmitResponse = JsonResponse<'/api/deals/{deal_id}/sign/submit', 'post'>
+export type DealTradeWindowResponse = JsonResponse<'/api/deals/{deal_id}/trade-window', 'get'>
 export type DealMessageListResponse = JsonResponse<'/api/deals/{deal_id}/messages', 'get'>
 export type DealSendMessageRequest = JsonRequest<'/api/deals/{deal_id}/messages', 'post'>
 export type DealMessageItem = paths['/api/deals/{deal_id}/messages']['post'] extends {
@@ -316,6 +317,9 @@ export const api = {
   },
 
   dealGet: (id: string) => request<DealDetailResponse>(`/api/deals/${id}`),
+
+  dealTradeWindow: (id: string) =>
+    request<DealTradeWindowResponse>(`/api/deals/${id}/trade-window`),
 
   dealSignDraft: (id: string) =>
     request<DealSignDraftResponse>(`/api/deals/${id}/sign/draft`, {
