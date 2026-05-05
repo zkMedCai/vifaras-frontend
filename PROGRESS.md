@@ -973,3 +973,39 @@ Risultati:
 - Live smoke `/deals` HTTP `200`.
 - Live smoke `/dashboard` HTTP `200`.
 - `git diff --check` verde.
+
+---
+
+## FASE 10.1.4.1 — Post-deal chat panel — 2026-05-05
+
+### Implementazione
+
+- `/deals/[id]` ora include il pannello `Chat post-deal`.
+- Stato UI:
+  - `Bloccata` quando il deal non e `confirmed`;
+  - `Sbloccata` quando entrambe le parti hanno firmato.
+- Aggiunto client API typed per:
+  - `GET /api/deals/{deal_id}/messages`
+  - `POST /api/deals/{deal_id}/messages`
+- Aggiunti hook `useDealMessages` e `useSendDealMessage`.
+- Per V0 web smoke, il pannello invia testo base64 nel campo
+  `encrypted_content_b64`; il backend continua a trattarlo come blob opaco
+  E2E-ready.
+
+### Verifica
+
+```bash
+npx tsc --noEmit
+npm run lint
+npm run build
+curl -sS -o /tmp/vifaras_confirmed_deal_chat.html -w "%{http_code}" -m 5 \
+  http://127.0.0.1:3000/deals/<deal_id>
+```
+
+Risultati:
+
+- TypeScript verde.
+- Lint verde.
+- Build verde.
+- Live route `/deals/<deal_id>` HTTP `200`.
+- E2E doppia firma buyer/seller: deal `confirmed`, chat API sbloccata.

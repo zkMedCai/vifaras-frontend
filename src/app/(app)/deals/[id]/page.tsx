@@ -3,7 +3,13 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ApiError } from '@/lib/api-client'
-import { useCreateDealSignDraft, useDeal, useSubmitDealSignature } from '@/lib/deal-queries'
+import {
+  useCreateDealSignDraft,
+  useDeal,
+  useDealMessages,
+  useSendDealMessage,
+  useSubmitDealSignature,
+} from '@/lib/deal-queries'
 import {
   formatDateTime,
   formatEuroCents,
@@ -13,6 +19,34 @@ import {
 import { useAuthStore } from '@/lib/auth-store'
 import { getWebAuthnErrorMessage } from '@/lib/auth-errors'
 import { signDealWithPasskey } from '@/lib/webauthn'
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary)
+}
+
+function base64ToText(value: string) {
+  try {
+    const binary = atob(value)
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return '[messaggio cifrato]'
+  }
+}
+
+function textToBase64(value: string) {
+  return bytesToBase64(new TextEncoder().encode(value))
+}
+
+function randomNonceB64() {
+  const nonce = new Uint8Array(12)
+  crypto.getRandomValues(nonce)
+  return bytesToBase64(nonce)
+}
 
 function roleLabel(role: 'buyer' | 'seller' | null) {
   if (role === 'buyer') return 'compratore'
@@ -58,8 +92,12 @@ export default function DealDetailPage() {
   const { data, isLoading, error } = useDeal(dealId)
   const createDraft = useCreateDealSignDraft()
   const submitSignature = useSubmitDealSignature()
+  const messages = useDealMessages(dealId, data?.status === 'confirmed')
+  const sendMessage = useSendDealMessage()
   const [uxError, setUxError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [chatText, setChatText] = useState('')
+  const [chatError, setChatError] = useState<string | null>(null)
 
   if (isLoading) {
     return (
@@ -109,6 +147,29 @@ export default function DealDetailPage() {
     } catch (err) {
       setUxError(mapSignError(err))
       console.error('Deal signing failed:', err)
+    }
+  }
+
+  const handleSendMessage = async () => {
+    const text = chatText.trim()
+    if (!text) return
+
+    setChatError(null)
+    try {
+      await sendMessage.mutateAsync({
+        dealId: data.deal_id,
+        body: {
+          encrypted_content_b64: textToBase64(text),
+          nonce_b64: randomNonceB64(),
+        },
+      })
+      setChatText('')
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 409) {
+        setChatError('Chat bloccata finché entrambe le parti non firmano.')
+        return
+      }
+      setChatError('Invio messaggio non riuscito.')
     }
   }
 
@@ -198,6 +259,68 @@ export default function DealDetailPage() {
             <dd className="mt-1 font-mono text-xs">{data.sell_intent_id}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="rounded-lg border border-gray-200 bg-white p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-950">Chat post-deal</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              {data.status === 'confirmed'
+                ? 'Canale sbloccato dopo la doppia firma.'
+                : 'Si sblocca solo quando compratore e venditore hanno firmato.'}
+            </p>
+          </div>
+          <span
+            className={`w-fit rounded-full border px-2.5 py-1 text-xs font-medium ${
+              data.status === 'confirmed'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-gray-200 bg-gray-100 text-gray-700'
+            }`}
+          >
+            {data.status === 'confirmed' ? 'Sbloccata' : 'Bloccata'}
+          </span>
+        </div>
+
+        {data.status === 'confirmed' && (
+          <div className="mt-5 space-y-4">
+            <div className="space-y-3">
+              {messages.isLoading ? (
+                <p className="text-sm text-gray-600">Caricamento messaggi...</p>
+              ) : messages.data?.messages.length ? (
+                messages.data.messages.map((message) => (
+                  <div key={message.message_id} className="border-l border-gray-200 pl-4 text-sm">
+                    <p className="font-mono text-xs text-gray-500">
+                      {message.sender_user_id.slice(0, 8)} · {formatDateTime(message.sent_at)}
+                    </p>
+                    <p className="mt-1 text-gray-800">
+                      {base64ToText(message.encrypted_content_b64)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-600">Nessun messaggio ancora.</p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                value={chatText}
+                onChange={(event) => setChatText(event.target.value)}
+                className="min-h-11 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                placeholder="Scrivi un messaggio post-deal"
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={sendMessage.isPending || !chatText.trim()}
+                className="rounded-lg bg-gray-950 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              >
+                {sendMessage.isPending ? 'Invio...' : 'Invia'}
+              </button>
+            </div>
+            {chatError && <p className="text-sm font-semibold text-red-700">{chatError}</p>}
+          </div>
+        )}
       </section>
 
       {uxError && (

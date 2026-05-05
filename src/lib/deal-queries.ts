@@ -2,7 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   api,
   type DealDetailResponse,
+  type DealMessageItem,
+  type DealMessageListResponse,
   type DealListResponse,
+  type DealSendMessageRequest,
   type DealSignSubmitRequest,
   type DealSignSubmitResponse,
 } from './api-client'
@@ -14,6 +17,7 @@ export const DEALS_LIST_QUERY_KEY = (params?: {
 }) => ['deals', 'list', params] as const
 
 export const DEAL_DETAIL_QUERY_KEY = (id: string) => ['deals', 'detail', id] as const
+export const DEAL_MESSAGES_QUERY_KEY = (id: string) => ['deals', 'messages', id] as const
 
 export function useDeals(params?: { status?: string; limit?: number; offset?: number }) {
   return useQuery<DealListResponse>({
@@ -48,6 +52,25 @@ export function useSubmitDealSignature() {
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: DEAL_DETAIL_QUERY_KEY(variables.dealId) })
       void queryClient.invalidateQueries({ queryKey: ['deals', 'list'] })
+    },
+  })
+}
+
+export function useDealMessages(id: string, enabled: boolean) {
+  return useQuery<DealMessageListResponse>({
+    queryKey: DEAL_MESSAGES_QUERY_KEY(id),
+    queryFn: () => api.dealMessages(id, { limit: 50 }),
+    enabled: Boolean(id) && enabled,
+  })
+}
+
+export function useSendDealMessage() {
+  const queryClient = useQueryClient()
+
+  return useMutation<DealMessageItem, Error, { dealId: string; body: DealSendMessageRequest }>({
+    mutationFn: ({ dealId, body }) => api.dealSendMessage(dealId, body),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: DEAL_MESSAGES_QUERY_KEY(variables.dealId) })
     },
   })
 }

@@ -166,6 +166,13 @@ export type DealDetailResponse = JsonResponse<'/api/deals/{deal_id}', 'get'>
 export type DealSignDraftResponse = JsonResponse<'/api/deals/{deal_id}/sign/draft', 'post'>
 export type DealSignSubmitRequest = JsonRequest<'/api/deals/{deal_id}/sign/submit', 'post'>
 export type DealSignSubmitResponse = JsonResponse<'/api/deals/{deal_id}/sign/submit', 'post'>
+export type DealMessageListResponse = JsonResponse<'/api/deals/{deal_id}/messages', 'get'>
+export type DealSendMessageRequest = JsonRequest<'/api/deals/{deal_id}/messages', 'post'>
+export type DealMessageItem = paths['/api/deals/{deal_id}/messages']['post'] extends {
+  responses: { 201: { content: { 'application/json': infer R } } }
+}
+  ? R
+  : never
 
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
@@ -317,6 +324,24 @@ export const api = {
 
   dealSignSubmit: (id: string, body: DealSignSubmitRequest) =>
     request<DealSignSubmitResponse>(`/api/deals/${id}/sign/submit`, {
+      method: 'POST',
+      body,
+    }),
+
+  dealMessages: (id: string, params?: { limit?: number; before_id?: string }) => {
+    const queryString = params
+      ? '?' +
+        new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)]),
+        ).toString()
+      : ''
+    return request<DealMessageListResponse>(`/api/deals/${id}/messages${queryString}`)
+  },
+
+  dealSendMessage: (id: string, body: DealSendMessageRequest) =>
+    request<DealMessageItem>(`/api/deals/${id}/messages`, {
       method: 'POST',
       body,
     }),
