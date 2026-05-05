@@ -30,11 +30,11 @@ export async function registerNewPasskey(email: string) {
   }
 }
 
-interface SignMandateInput {
+interface SignChallengeInput {
   challenge: string
 }
 
-interface WebAuthnAssertionPayload {
+export interface WebAuthnAssertionPayload {
   id: string
   rawId: string
   type: string
@@ -47,8 +47,8 @@ interface WebAuthnAssertionPayload {
 // challenge in the draft response. rpId is omitted: browser defaults to the
 // current hostname, which matches backend webauthn_rp_id="localhost" in dev.
 // Prod deploy requires explicit env-var match (IDEAS_BACKLOG V0.5+).
-export async function signMandateWithPasskey(
-  input: SignMandateInput,
+async function signChallengeWithPasskey(
+  input: SignChallengeInput,
 ): Promise<WebAuthnAssertionPayload> {
   const optionsJSON = {
     challenge: input.challenge,
@@ -66,6 +66,16 @@ export async function signMandateWithPasskey(
     type: assertion.type,
     response: assertion.response as unknown as Record<string, unknown>,
   }
+}
+
+export function signMandateWithPasskey(
+  input: SignChallengeInput,
+): Promise<WebAuthnAssertionPayload> {
+  return signChallengeWithPasskey(input)
+}
+
+export function signDealWithPasskey(input: SignChallengeInput): Promise<WebAuthnAssertionPayload> {
+  return signChallengeWithPasskey(input)
 }
 
 export async function loginWithPasskey(email: string) {

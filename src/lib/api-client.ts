@@ -161,6 +161,12 @@ export type MatchDetailResponse = JsonResponse<'/api/matches/{match_id}', 'get'>
 export type NegotiationListResponse = JsonResponse<'/api/negotiations', 'get'>
 export type NegotiationStateResponse = JsonResponse<'/api/negotiations/{negotiation_id}', 'get'>
 
+export type DealListResponse = JsonResponse<'/api/deals', 'get'>
+export type DealDetailResponse = JsonResponse<'/api/deals/{deal_id}', 'get'>
+export type DealSignDraftResponse = JsonResponse<'/api/deals/{deal_id}/sign/draft', 'post'>
+export type DealSignSubmitRequest = JsonRequest<'/api/deals/{deal_id}/sign/submit', 'post'>
+export type DealSignSubmitResponse = JsonResponse<'/api/deals/{deal_id}/sign/submit', 'post'>
+
 export const api = {
   health: () => request<HealthResponse>('/api/health'),
 
@@ -289,4 +295,29 @@ export const api = {
   },
 
   negotiationGet: (id: string) => request<NegotiationStateResponse>(`/api/negotiations/${id}`),
+
+  dealsList: (params?: { status?: string; limit?: number; offset?: number }) => {
+    const queryString = params
+      ? '?' +
+        new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => [k, String(v)]),
+        ).toString()
+      : ''
+    return request<DealListResponse>(`/api/deals${queryString}`)
+  },
+
+  dealGet: (id: string) => request<DealDetailResponse>(`/api/deals/${id}`),
+
+  dealSignDraft: (id: string) =>
+    request<DealSignDraftResponse>(`/api/deals/${id}/sign/draft`, {
+      method: 'POST',
+    }),
+
+  dealSignSubmit: (id: string, body: DealSignSubmitRequest) =>
+    request<DealSignSubmitResponse>(`/api/deals/${id}/sign/submit`, {
+      method: 'POST',
+      body,
+    }),
 }

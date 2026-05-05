@@ -33,7 +33,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Link
             href="/intents"
             className="rounded-lg border border-slate-200 bg-white p-4 text-sm hover:border-blue-400"
@@ -54,6 +54,13 @@ export default function DashboardPage() {
           >
             <p className="font-semibold text-slate-950">Negoziati</p>
             <p className="mt-1 text-slate-600">Leggi i transcript delle offerte.</p>
+          </Link>
+          <Link
+            href="/deals"
+            className="rounded-lg border border-slate-200 bg-white p-4 text-sm hover:border-blue-400"
+          >
+            <p className="font-semibold text-slate-950">Deal</p>
+            <p className="mt-1 text-slate-600">Firma accordi pending con passkey.</p>
           </Link>
         </div>
 

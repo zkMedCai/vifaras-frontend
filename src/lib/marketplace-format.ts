@@ -35,11 +35,16 @@ export function formatStatus(status: string) {
     active: 'Attiva',
     agreed: 'Accettata',
     cancelled: 'Annullata',
+    cancelled_revoked: 'Revocata',
     closed: 'Chiusa',
+    completed: 'Completata',
+    confirmed: 'Confermata',
     discovered: 'Trovata',
+    disputed: 'Contestata',
     expired: 'Scaduta',
     matched: 'Match trovato',
     negotiating: 'In negoziazione',
+    pending_signatures: 'In attesa firme',
     rejected: 'Rifiutata',
   }
   return labels[status] ?? status
@@ -49,10 +54,24 @@ export function statusBadgeClass(status: string) {
   if (status === 'active' || status === 'negotiating') {
     return 'border-blue-200 bg-blue-50 text-blue-700'
   }
-  if (status === 'agreed' || status === 'matched') {
+  if (
+    status === 'agreed' ||
+    status === 'matched' ||
+    status === 'confirmed' ||
+    status === 'completed'
+  ) {
     return 'border-emerald-200 bg-emerald-50 text-emerald-700'
   }
-  if (status === 'rejected' || status === 'cancelled' || status === 'expired') {
+  if (status === 'pending_signatures') {
+    return 'border-amber-200 bg-amber-50 text-amber-700'
+  }
+  if (
+    status === 'rejected' ||
+    status === 'cancelled' ||
+    status === 'cancelled_revoked' ||
+    status === 'expired' ||
+    status === 'disputed'
+  ) {
     return 'border-gray-200 bg-gray-100 text-gray-700'
   }
   return 'border-slate-200 bg-white text-slate-700'

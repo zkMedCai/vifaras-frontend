@@ -925,3 +925,51 @@ Risultati:
 - Build non rieseguita durante `next dev` attivo per evitare la stessa
   corruzione cache `.next` gia vista in 10.1.3.
 - Live smoke `/intents/new` HTTP `200`.
+
+---
+
+## FASE 10.1.4 — Deal pending signature UI — 2026-05-05
+
+### Implementazione
+
+- Aggiunto client API typed per:
+  - `GET /api/deals`
+  - `GET /api/deals/{deal_id}`
+  - `POST /api/deals/{deal_id}/sign/draft`
+  - `POST /api/deals/{deal_id}/sign/submit`
+- Aggiunto `deal-queries.ts` con query list/detail e mutation firma.
+- Aggiunta route `/deals`:
+  - lista deal utente;
+  - filtro stato (`pending_signatures`, `confirmed`, `cancelled`, `expired`);
+  - card con prezzo concordato, scadenza e stato firma.
+- Aggiunta route `/deals/[id]`:
+  - dettaglio deal;
+  - stato firma buyer/seller;
+  - firma passkey WebAuthn per il ruolo dell'utente;
+  - feedback success/error post submit;
+  - link al transcript negoziazione.
+- `webauthn.ts` ora espone `signDealWithPasskey`, riusando lo stesso challenge-only flow del mandate signing.
+- Nav interna Intent/Match/Negoziati/Deal deduplicata in `AppSectionShell`.
+- Dashboard aggiornata con entrypoint `Deal`.
+- `marketplace-format.ts` aggiornato con label/badge per `pending_signatures`, `confirmed`, `completed`, `disputed`, `cancelled_revoked`.
+
+### Verifica
+
+```bash
+npx prettier --write ...
+npx tsc --noEmit
+npm run lint
+npm run build
+curl -sS -o /tmp/vifaras_deals.html -w "%{http_code}" -m 5 http://127.0.0.1:3000/deals
+curl -sS -o /tmp/vifaras_dashboard.html -w "%{http_code}" -m 5 http://127.0.0.1:3000/dashboard
+git diff --check
+```
+
+Risultati:
+
+- TypeScript verde.
+- Lint verde.
+- Build verde; nuove route generate: `/deals`, `/deals/[id]`.
+- Live smoke `/deals` HTTP `200`.
+- Live smoke `/dashboard` HTTP `200`.
+- `git diff --check` verde.
