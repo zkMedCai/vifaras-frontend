@@ -831,6 +831,57 @@ Risultati:
 - TypeScript verde.
 - Lint verde.
 - Build verde.
+
+---
+
+## FASE 10.1.5 — Capital Mandate UI — 2026-05-07
+
+### Frontend
+
+- Aggiunto client typed per `/api/capital-mandates`.
+- Aggiunti hook React Query per:
+  - active mandate;
+  - draft;
+  - submit passkey;
+  - pause/resume/revoke;
+  - ledger;
+  - positions.
+- Aggiunta route `/capital-mandate`.
+- Aggiunto entrypoint dashboard `Mandato budget 30 giorni`.
+- Aggiunta navigazione app verso il mandato budget.
+- UI V0:
+  - form budget 30 giorni;
+  - review dei limiti;
+  - firma passkey;
+  - pannello mandato attivo;
+  - budget summary;
+  - ledger operativo;
+  - positions list skeleton;
+  - pause/revoke e resume per mandato sospeso.
+- Copy italiano allineato al prodotto:
+  - mandato operativo;
+  - budget di compravendita;
+  - nessuna approvazione deal-by-deal entro limiti;
+  - profitti non garantiti;
+  - V0 senza denaro reale.
+
+### Verifica
+
+```bash
+npm run api:types
+npx tsc --noEmit
+npm run lint
+npm run build
+git diff --check
+```
+
+Risultati:
+
+- Tipi OpenAPI rigenerati da backend locale.
+- TypeScript verde.
+- Lint verde.
+- Build verde.
+- `git diff --check` verde.
 - Prettier check verde sui file code toccati.
 - Live dev server `3000`: dopo `next build` mentre `next dev` era gia acceso, le nuove route rispondono 500 per cache `.next` corrotta (`Cannot find module './948.js'` / vendor chunk missing). Stesso failure mode gia visto in 10.1.2. Serve restart dev server o clear `.next`; non e type/build regression.
 

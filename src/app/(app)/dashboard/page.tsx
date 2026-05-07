@@ -33,7 +33,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Link
             href="/intents"
             className="rounded-lg border border-slate-200 bg-white p-4 text-sm hover:border-blue-400"
@@ -61,6 +61,13 @@ export default function DashboardPage() {
           >
             <p className="font-semibold text-slate-950">Deal</p>
             <p className="mt-1 text-slate-600">Firma accordi pending con passkey.</p>
+          </Link>
+          <Link
+            href="/capital-mandate"
+            className="rounded-lg border border-slate-200 bg-white p-4 text-sm hover:border-blue-400"
+          >
+            <p className="font-semibold text-slate-950">Mandato budget 30 giorni</p>
+            <p className="mt-1 text-slate-600">Budget operativo e limiti autonomi.</p>
           </Link>
         </div>
 

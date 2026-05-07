@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: '/matches', label: 'Match', key: 'matches' },
   { href: '/negotiations', label: 'Negoziati', key: 'negotiations' },
   { href: '/deals', label: 'Deal', key: 'deals' },
+  { href: '/capital-mandate', label: 'Mandato budget', key: 'capitalMandate' },
 ] as const
 
 type NavKey = (typeof NAV_ITEMS)[number]['key']

@@ -74,6 +74,12 @@ export function signMandateWithPasskey(
   return signChallengeWithPasskey(input)
 }
 
+export function signCapitalMandateWithPasskey(
+  input: SignChallengeInput,
+): Promise<WebAuthnAssertionPayload> {
+  return signChallengeWithPasskey(input)
+}
+
 export function signDealWithPasskey(input: SignChallengeInput): Promise<WebAuthnAssertionPayload> {
   return signChallengeWithPasskey(input)
 }

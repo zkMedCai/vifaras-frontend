@@ -145,6 +145,21 @@ export type MandateDraftResponse = JsonResponse<'/api/mandates/draft', 'post'>
 export type MandateSubmitRequest = JsonRequest<'/api/mandates/submit', 'post'>
 export type MandateSubmitResponse = JsonResponse<'/api/mandates/submit', 'post'>
 
+export type CapitalMandateDraftRequest = JsonRequest<'/api/capital-mandates/draft', 'post'>
+export type CapitalMandateDraftResponse = JsonResponse<'/api/capital-mandates/draft', 'post'>
+export type CapitalMandateSubmitRequest = JsonRequest<'/api/capital-mandates/submit', 'post'>
+export type CapitalMandateSubmitResponse = JsonResponse<'/api/capital-mandates/submit', 'post'>
+export type ActiveCapitalMandateResponse = JsonResponse<'/api/capital-mandates/active', 'get'>
+export type CapitalMandateResponse = JsonResponse<'/api/capital-mandates/{capital_mandate_id}', 'get'>
+export type CapitalMandateLedgerResponse = JsonResponse<
+  '/api/capital-mandates/{capital_mandate_id}/ledger',
+  'get'
+>
+export type CapitalMandatePositionsResponse = JsonResponse<
+  '/api/capital-mandates/{capital_mandate_id}/positions',
+  'get'
+>
+
 export type IntentListResponse = JsonResponse<'/api/intents', 'get'>
 export type IntentResponse = JsonResponse<'/api/intents/{intent_id}', 'get'>
 export type NaturalIntentDraftRequest = JsonRequest<'/api/intents/draft-from-text', 'post'>
@@ -247,6 +262,46 @@ export const api = {
       method: 'POST',
       body,
     }),
+
+  createCapitalMandateDraft: (body: CapitalMandateDraftRequest) =>
+    request<CapitalMandateDraftResponse>('/api/capital-mandates/draft', {
+      method: 'POST',
+      body,
+    }),
+
+  submitCapitalMandate: (body: CapitalMandateSubmitRequest) =>
+    request<CapitalMandateSubmitResponse>('/api/capital-mandates/submit', {
+      method: 'POST',
+      body,
+    }),
+
+  activeCapitalMandate: () =>
+    request<ActiveCapitalMandateResponse>('/api/capital-mandates/active'),
+
+  capitalMandateGet: (id: string) =>
+    request<CapitalMandateResponse>(`/api/capital-mandates/${id}`),
+
+  capitalMandatePause: (id: string) =>
+    request<CapitalMandateResponse>(`/api/capital-mandates/${id}/pause`, {
+      method: 'POST',
+    }),
+
+  capitalMandateResume: (id: string) =>
+    request<CapitalMandateResponse>(`/api/capital-mandates/${id}/resume`, {
+      method: 'POST',
+    }),
+
+  capitalMandateRevoke: (id: string, reason?: string) =>
+    request<CapitalMandateResponse>(`/api/capital-mandates/${id}/revoke`, {
+      method: 'POST',
+      body: { reason: reason || 'user_revoked' },
+    }),
+
+  capitalMandateLedger: (id: string) =>
+    request<CapitalMandateLedgerResponse>(`/api/capital-mandates/${id}/ledger`),
+
+  capitalMandatePositions: (id: string) =>
+    request<CapitalMandatePositionsResponse>(`/api/capital-mandates/${id}/positions`),
 
   intentsList: (params?: { status?: string; side?: string; limit?: number; offset?: number }) => {
     const queryString = params
