@@ -2,14 +2,16 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ApiError } from '@/lib/api-client'
+import { ApiError, type DealShippingOptionsResponse } from '@/lib/api-client'
 import {
   useApplyTradeWindowAction,
   useCreateDealSignDraft,
   useDeal,
+  useDealShippingOptions,
   useDealMessages,
   useDealTradeWindow,
   useSendDealMessage,
+  useSelectDealShippingMethod,
   useSubmitDealSignature,
 } from '@/lib/deal-queries'
 import {
@@ -66,6 +68,8 @@ function roleLabel(role: 'buyer' | 'seller' | null) {
 
 function nextActionLabel(action: string | undefined) {
   const labels: Record<string, string> = {
+    select_shipping_method: 'Selezionare metodo di spedizione',
+    prepare_shipment: 'Preparare spedizione o consegna',
     seller_prepare_shipping: 'Preparare spedizione o consegna',
     wait_for_seller_shipping: 'Attendere aggiornamento venditore',
     buyer_confirm_delivery: 'Confermare ricezione',
@@ -85,6 +89,18 @@ function shippingStatusLabel(status: string | undefined) {
     completed: 'Completed',
   }
   return status ? labels[status] ?? status : 'Shipping pending'
+}
+
+function disabledReasonLabel(reason: string | null | undefined) {
+  const labels: Record<string, string> = {
+    pickup_not_available: 'Ritiro non disponibile per questo deal',
+    tracking_required_over_25_eur: 'Tracking richiesto sopra i 25 EUR',
+    category_not_compatible: 'Categoria non compatibile',
+    insurance_required_for_high_value: 'Assicurazione richiesta per alto valore',
+  }
+  return reason
+    ? labels[reason] ?? 'Non disponibile per questo deal'
+    : 'Non disponibile per questo deal'
 }
 
 function tradeStepState(
@@ -149,6 +165,78 @@ function TradeWindowStep({
   )
 }
 
+type ShippingOption = DealShippingOptionsResponse['options'][number]
+
+function ShippingOptionCard({
+  option,
+  checked,
+  onSelect,
+}: {
+  option: ShippingOption
+  checked: boolean
+  onSelect: () => void
+}) {
+  const stateClass = !option.allowed
+    ? 'border-gray-200 bg-gray-50 opacity-70'
+    : checked
+      ? 'border-blue-500 bg-blue-50'
+      : 'border-gray-200 bg-white hover:border-blue-200'
+
+  return (
+    <label className={`block rounded-lg border p-4 text-sm ${stateClass}`}>
+      <div className="flex items-start gap-3">
+        <input
+          type="radio"
+          name="shipping-method"
+          checked={checked}
+          disabled={!option.allowed}
+          onChange={onSelect}
+          className="mt-1 h-4 w-4"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-gray-950">{option.label}</span>
+            {option.recommended && option.allowed && (
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                Metodo consigliato
+              </span>
+            )}
+            {!option.allowed && (
+              <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-semibold text-gray-600">
+                Non disponibile per questo deal
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-gray-600">{option.description}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-800">
+              {formatEuroCents(option.price_cents)}
+            </span>
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-800">
+              {option.tracking_required ? 'Tracciata' : 'Non tracciata'}
+            </span>
+            {option.insurance_available && (
+              <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-800">
+                Assicurazione disponibile
+              </span>
+            )}
+            {option.insurance_required && (
+              <span className="rounded-full bg-red-50 px-2 py-1 text-red-700">
+                Assicurazione richiesta
+              </span>
+            )}
+          </div>
+          {!option.allowed && (
+            <p className="mt-3 text-xs font-semibold text-gray-600">
+              {disabledReasonLabel(option.disabled_reason)}
+            </p>
+          )}
+        </div>
+      </div>
+    </label>
+  )
+}
+
 function mapSignError(err: unknown) {
   const webauthnMessage = getWebAuthnErrorMessage(err)
   if (webauthnMessage) return webauthnMessage
@@ -198,6 +286,25 @@ function mapTradeActionError(err: unknown) {
   return 'Azione Trade Window non riuscita.'
 }
 
+function mapShippingSelectionError(err: unknown) {
+  if (err instanceof ApiError) {
+    const code = (err.body as { detail?: { code?: string } } | undefined)?.detail?.code
+    switch (code) {
+      case 'deal_not_confirmed':
+        return 'La spedizione si sblocca dopo la doppia firma.'
+      case 'not_party_to_deal':
+        return 'Non puoi accedere a questo deal.'
+      case 'shipping_method_not_allowed':
+        return 'Questo metodo non è ammesso per valore/categoria del deal.'
+      default:
+        if (err.statusCode === 429) return 'Troppi tentativi. Attendi qualche secondo.'
+        if (err.statusCode >= 500) return 'Errore backend. Riprova più tardi.'
+    }
+  }
+
+  return 'Selezione spedizione non riuscita.'
+}
+
 export default function DealDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
@@ -208,15 +315,19 @@ export default function DealDetailPage() {
   const submitSignature = useSubmitDealSignature()
   const tradeUnlocked = data?.status === 'confirmed' || data?.status === 'completed'
   const tradeWindow = useDealTradeWindow(dealId, tradeUnlocked)
+  const shippingOptions = useDealShippingOptions(dealId, tradeUnlocked)
   const messages = useDealMessages(dealId, tradeUnlocked)
   const sendMessage = useSendDealMessage()
   const applyTradeAction = useApplyTradeWindowAction()
+  const selectShippingMethod = useSelectDealShippingMethod()
   const [uxError, setUxError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [chatText, setChatText] = useState('')
   const [chatError, setChatError] = useState<string | null>(null)
   const [trackingReference, setTrackingReference] = useState('')
   const [tradeActionError, setTradeActionError] = useState<string | null>(null)
+  const [selectedShippingCode, setSelectedShippingCode] = useState<string | null>(null)
+  const [shippingSelectionError, setShippingSelectionError] = useState<string | null>(null)
 
   if (isLoading) {
     return (
@@ -251,12 +362,22 @@ export default function DealDetailPage() {
   const tradeDelivery = asString(tradeTerms.delivery) ?? 'Da coordinare'
   const tradePriceCents = asNumber(tradeTerms.agreed_price_cents) ?? data.agreed_price_cents
   const shippingStatus = tradeWindow.data?.shipping_status ?? 'shipping_pending'
+  const selectedShippingMethod = shippingOptions.data?.selected_method ?? null
+  const recommendedShippingCode =
+    shippingOptions.data?.options.find((option) => option.allowed && option.recommended)?.code ??
+    shippingOptions.data?.options.find((option) => option.allowed)?.code ??
+    ''
+  const effectiveShippingCode = selectedShippingCode ?? recommendedShippingCode
   const canMarkShipped =
-    isTradeUnlocked && myRole === 'seller' && shippingStatus === 'shipping_pending'
+    isTradeUnlocked &&
+    myRole === 'seller' &&
+    shippingStatus === 'shipping_pending' &&
+    Boolean(selectedShippingMethod)
   const canMarkDelivered = isTradeUnlocked && myRole === 'buyer' && shippingStatus === 'shipped'
   const canCompleteTrade =
     isTradeUnlocked && myRole !== null && shippingStatus === 'delivered' && !isCompleted
   const tradeActionBusy = applyTradeAction.isPending
+  const shippingSelectionBusy = selectShippingMethod.isPending
 
   const handleSign = async () => {
     setUxError(null)
@@ -309,6 +430,27 @@ export default function DealDetailPage() {
       }
     } catch (err) {
       setTradeActionError(mapTradeActionError(err))
+    }
+  }
+
+  const handleSelectShippingMethod = async () => {
+    if (!effectiveShippingCode) return
+
+    setShippingSelectionError(null)
+    setSuccessMessage(null)
+
+    try {
+      await selectShippingMethod.mutateAsync({
+        dealId: data.deal_id,
+        body: {
+          method_code: effectiveShippingCode,
+          paid_by: 'buyer',
+        },
+      })
+      setSelectedShippingCode(null)
+      setSuccessMessage('Metodo di spedizione selezionato.')
+    } catch (err) {
+      setShippingSelectionError(mapShippingSelectionError(err))
     }
   }
 
@@ -517,6 +659,78 @@ export default function DealDetailPage() {
                 </dd>
               </div>
             </dl>
+
+            <div className="space-y-4 border-t border-gray-100 pt-4">
+              <div>
+                <h3 className="text-base font-semibold text-gray-950">Spedizione</h3>
+                {shippingOptions.isLoading ? (
+                  <p className="mt-2 text-sm text-gray-600">Caricamento opzioni spedizione...</p>
+                ) : shippingOptions.error ? (
+                  <p className="mt-2 text-sm font-semibold text-red-700">
+                    {mapShippingSelectionError(shippingOptions.error)}
+                  </p>
+                ) : selectedShippingMethod ? (
+                  <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm">
+                    <p className="font-semibold text-emerald-800">Metodo selezionato</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-gray-950">
+                        {selectedShippingMethod.method_label}
+                      </span>
+                      <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-800">
+                        {formatEuroCents(selectedShippingMethod.price_cents)}
+                      </span>
+                      <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-800">
+                        {selectedShippingMethod.tracking_required ? 'Tracciata' : 'Non tracciata'}
+                      </span>
+                      {selectedShippingMethod.insurance_available && (
+                        <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-800">
+                          Assicurazione disponibile
+                        </span>
+                      )}
+                      {selectedShippingMethod.insurance_required && (
+                        <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-red-700">
+                          Assicurazione richiesta
+                        </span>
+                      )}
+                    </div>
+                    {shippingStatus === 'shipping_pending' && (
+                      <p className="mt-3 text-sm font-semibold text-gray-700">
+                        Spedizione da preparare
+                      </p>
+                    )}
+                  </div>
+                ) : isCompleted ? (
+                  <p className="mt-2 text-sm text-gray-600">Metodo non selezionato.</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {shippingOptions.data?.options.map((option) => (
+                        <ShippingOptionCard
+                          key={option.code}
+                          option={option}
+                          checked={effectiveShippingCode === option.code}
+                          onSelect={() => setSelectedShippingCode(option.code)}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => void handleSelectShippingMethod()}
+                      disabled={!effectiveShippingCode || shippingSelectionBusy}
+                      className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {shippingSelectionBusy
+                        ? 'Selezione...'
+                        : 'Seleziona metodo di spedizione'}
+                    </button>
+                    {shippingSelectionError && (
+                      <p className="text-sm font-semibold text-red-700">
+                        {shippingSelectionError}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
             <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
               <TradeWindowStep

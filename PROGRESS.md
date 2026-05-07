@@ -1096,3 +1096,46 @@ Risultati:
 - Lint verde.
 - Build verde.
 - `git diff --check` verde.
+
+---
+
+## FASE 10.1.4.5 — Shipping Options UI — 2026-05-07
+
+### Frontend
+
+- Aggiunto client typed per:
+  - `GET /api/deals/{deal_id}/shipping-options`
+  - `POST /api/deals/{deal_id}/shipping-method`
+- Aggiunti hook:
+  - `useDealShippingOptions`
+  - `useSelectDealShippingMethod`
+- Il pannello `Trade Window` ora include sezione `Spedizione`:
+  - lista metodi disponibili;
+  - radio/card per scelta metodo;
+  - badge `Metodo consigliato`;
+  - prezzo, tracking e assicurazione;
+  - stato disabled con motivo;
+  - riepilogo `Metodo selezionato`.
+- La chat post-deal resta sotto la Trade Window come canale separato di
+  coordinamento.
+- Error handling UI per:
+  - `deal_not_confirmed`
+  - `not_party_to_deal`
+  - `shipping_method_not_allowed`
+
+### Verifica
+
+```bash
+npx openapi-typescript /tmp/vifaras_openapi.json -o src/lib/api-types.ts
+npx tsc --noEmit
+npm run lint
+npm run build
+git diff --check
+```
+
+Risultati:
+
+- Tipi OpenAPI rigenerati localmente da schema FastAPI.
+- TypeScript verde.
+- Lint verde.
+- Build verde.

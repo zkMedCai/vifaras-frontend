@@ -171,6 +171,14 @@ export type DealTradeWindowActionRequest = JsonRequest<
   '/api/deals/{deal_id}/trade-window/action',
   'post'
 >
+export type DealShippingOptionsResponse = JsonResponse<
+  '/api/deals/{deal_id}/shipping-options',
+  'get'
+>
+export type SelectDealShippingMethodRequest = JsonRequest<
+  '/api/deals/{deal_id}/shipping-method',
+  'post'
+>
 export type DealMessageListResponse = JsonResponse<'/api/deals/{deal_id}/messages', 'get'>
 export type DealSendMessageRequest = JsonRequest<'/api/deals/{deal_id}/messages', 'post'>
 export type DealMessageItem = paths['/api/deals/{deal_id}/messages']['post'] extends {
@@ -327,6 +335,15 @@ export const api = {
 
   dealTradeWindowAction: (id: string, body: DealTradeWindowActionRequest) =>
     request<DealTradeWindowResponse>(`/api/deals/${id}/trade-window/action`, {
+      method: 'POST',
+      body,
+    }),
+
+  dealShippingOptions: (id: string) =>
+    request<DealShippingOptionsResponse>(`/api/deals/${id}/shipping-options`),
+
+  dealSelectShippingMethod: (id: string, body: SelectDealShippingMethodRequest) =>
+    request<DealShippingOptionsResponse>(`/api/deals/${id}/shipping-method`, {
       method: 'POST',
       body,
     }),

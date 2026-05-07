@@ -8,8 +8,10 @@ import {
   type DealSendMessageRequest,
   type DealSignSubmitRequest,
   type DealSignSubmitResponse,
+  type DealShippingOptionsResponse,
   type DealTradeWindowActionRequest,
   type DealTradeWindowResponse,
+  type SelectDealShippingMethodRequest,
 } from './api-client'
 
 export const DEALS_LIST_QUERY_KEY = (params?: {
@@ -20,6 +22,8 @@ export const DEALS_LIST_QUERY_KEY = (params?: {
 
 export const DEAL_DETAIL_QUERY_KEY = (id: string) => ['deals', 'detail', id] as const
 export const DEAL_MESSAGES_QUERY_KEY = (id: string) => ['deals', 'messages', id] as const
+export const DEAL_SHIPPING_OPTIONS_QUERY_KEY = (id: string) =>
+  ['deals', 'shipping-options', id] as const
 export const DEAL_TRADE_WINDOW_QUERY_KEY = (id: string) => ['deals', 'trade-window', id] as const
 
 export function useDeals(params?: { status?: string; limit?: number; offset?: number }) {
@@ -67,6 +71,36 @@ export function useDealTradeWindow(id: string, enabled: boolean) {
     queryKey: DEAL_TRADE_WINDOW_QUERY_KEY(id),
     queryFn: () => api.dealTradeWindow(id),
     enabled: Boolean(id) && enabled,
+  })
+}
+
+export function useDealShippingOptions(id: string, enabled: boolean) {
+  return useQuery<DealShippingOptionsResponse>({
+    queryKey: DEAL_SHIPPING_OPTIONS_QUERY_KEY(id),
+    queryFn: () => api.dealShippingOptions(id),
+    enabled: Boolean(id) && enabled,
+  })
+}
+
+export function useSelectDealShippingMethod() {
+  const queryClient = useQueryClient()
+
+  return useMutation<
+    DealShippingOptionsResponse,
+    Error,
+    { dealId: string; body: SelectDealShippingMethodRequest }
+  >({
+    mutationFn: ({ dealId, body }) => api.dealSelectShippingMethod(dealId, body),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: DEAL_SHIPPING_OPTIONS_QUERY_KEY(variables.dealId),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: DEAL_TRADE_WINDOW_QUERY_KEY(variables.dealId),
+      })
+      void queryClient.invalidateQueries({ queryKey: DEAL_DETAIL_QUERY_KEY(variables.dealId) })
+      void queryClient.invalidateQueries({ queryKey: ['deals', 'list'] })
+    },
   })
 }
 
