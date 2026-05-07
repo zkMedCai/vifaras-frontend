@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ApiError } from '@/lib/api-client'
 import {
+  useApplyTradeWindowAction,
   useCreateDealSignDraft,
   useDeal,
   useDealMessages,
@@ -67,8 +68,35 @@ function nextActionLabel(action: string | undefined) {
   const labels: Record<string, string> = {
     seller_prepare_shipping: 'Preparare spedizione o consegna',
     wait_for_seller_shipping: 'Attendere aggiornamento venditore',
+    buyer_confirm_delivery: 'Confermare ricezione',
+    wait_for_buyer_delivery: 'Attendere conferma compratore',
+    complete_trade: 'Completare trade',
+    trade_completed: 'Trade completato',
+    review_trade_window: 'Verificare stato Trade Window',
   }
   return action ? labels[action] ?? action : 'In attesa'
+}
+
+function shippingStatusLabel(status: string | undefined) {
+  const labels: Record<string, string> = {
+    shipping_pending: 'Shipping pending',
+    shipped: 'Shipped',
+    delivered: 'Delivered',
+    completed: 'Completed',
+  }
+  return status ? labels[status] ?? status : 'Shipping pending'
+}
+
+function tradeStepState(
+  current: string | undefined,
+  step: 'shipping_pending' | 'shipped' | 'delivered' | 'completed',
+) {
+  const order = ['shipping_pending', 'shipped', 'delivered', 'completed']
+  const currentIndex = order.indexOf(current ?? 'shipping_pending')
+  const stepIndex = order.indexOf(step)
+  if (currentIndex > stepIndex) return 'done'
+  if (currentIndex === stepIndex) return 'current'
+  return 'pending'
 }
 
 function TimelineItem({
@@ -92,6 +120,32 @@ function TimelineItem({
       <span className={`h-3 w-3 shrink-0 rounded-full border-2 ${markerClass}`} />
       <span className={`text-sm font-medium ${textClass}`}>{label}</span>
     </li>
+  )
+}
+
+function TradeWindowStep({
+  label,
+  detail,
+  state,
+}: {
+  label: string
+  detail: string
+  state: 'done' | 'current' | 'pending'
+}) {
+  const borderClass =
+    state === 'done' ? 'border-emerald-300' : state === 'current' ? 'border-blue-300' : 'border-gray-200'
+  const labelClass =
+    state === 'done'
+      ? 'text-emerald-700'
+      : state === 'current'
+        ? 'text-blue-700'
+        : 'text-gray-500'
+
+  return (
+    <div className={`border-l pl-4 ${borderClass}`}>
+      <p className={`font-semibold ${labelClass}`}>{label}</p>
+      <p className="mt-1 text-gray-600">{detail}</p>
+    </div>
   )
 }
 
@@ -125,6 +179,25 @@ function mapSignError(err: unknown) {
   return 'Firma non riuscita. Riprova.'
 }
 
+function mapTradeActionError(err: unknown) {
+  if (err instanceof ApiError) {
+    const code = (err.body as { detail?: { code?: string } } | undefined)?.detail?.code
+    switch (code) {
+      case 'trade_window_action_forbidden':
+        return 'Azione non disponibile per il tuo ruolo.'
+      case 'invalid_trade_window_transition':
+        return 'Azione non valida per lo stato attuale.'
+      case 'deal_not_confirmed':
+        return 'Trade Window bloccata finché entrambe le parti non firmano.'
+      default:
+        if (err.statusCode === 429) return 'Troppi tentativi. Attendi qualche secondo.'
+        if (err.statusCode >= 500) return 'Errore backend. Riprova più tardi.'
+    }
+  }
+
+  return 'Azione Trade Window non riuscita.'
+}
+
 export default function DealDetailPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
@@ -133,13 +206,17 @@ export default function DealDetailPage() {
   const { data, isLoading, error } = useDeal(dealId)
   const createDraft = useCreateDealSignDraft()
   const submitSignature = useSubmitDealSignature()
-  const tradeWindow = useDealTradeWindow(dealId, data?.status === 'confirmed')
-  const messages = useDealMessages(dealId, data?.status === 'confirmed')
+  const tradeUnlocked = data?.status === 'confirmed' || data?.status === 'completed'
+  const tradeWindow = useDealTradeWindow(dealId, tradeUnlocked)
+  const messages = useDealMessages(dealId, tradeUnlocked)
   const sendMessage = useSendDealMessage()
+  const applyTradeAction = useApplyTradeWindowAction()
   const [uxError, setUxError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [chatText, setChatText] = useState('')
   const [chatError, setChatError] = useState<string | null>(null)
+  const [trackingReference, setTrackingReference] = useState('')
+  const [tradeActionError, setTradeActionError] = useState<string | null>(null)
 
   if (isLoading) {
     return (
@@ -165,13 +242,21 @@ export default function DealDetailPage() {
     myRole === 'buyer' ? data.seller_signed_at : myRole === 'seller' ? data.buyer_signed_at : null
   const canSign = data.status === 'pending_signatures' && myRole !== null && !mySignedAt
   const isBusy = createDraft.isPending || submitSignature.isPending
-  const isConfirmed = data.status === 'confirmed'
+  const isCompleted = data.status === 'completed'
+  const isTradeUnlocked = tradeUnlocked
   const tradeTerms = tradeWindow.data?.terms_summary ?? {}
   const tradeTitle =
     asString(tradeTerms.sell_intent_title) ?? asString(tradeTerms.buy_intent_title) ?? 'Deal'
   const tradeCategory = asString(tradeTerms.category) ?? 'Categoria non specificata'
   const tradeDelivery = asString(tradeTerms.delivery) ?? 'Da coordinare'
   const tradePriceCents = asNumber(tradeTerms.agreed_price_cents) ?? data.agreed_price_cents
+  const shippingStatus = tradeWindow.data?.shipping_status ?? 'shipping_pending'
+  const canMarkShipped =
+    isTradeUnlocked && myRole === 'seller' && shippingStatus === 'shipping_pending'
+  const canMarkDelivered = isTradeUnlocked && myRole === 'buyer' && shippingStatus === 'shipped'
+  const canCompleteTrade =
+    isTradeUnlocked && myRole !== null && shippingStatus === 'delivered' && !isCompleted
+  const tradeActionBusy = applyTradeAction.isPending
 
   const handleSign = async () => {
     setUxError(null)
@@ -196,6 +281,34 @@ export default function DealDetailPage() {
     } catch (err) {
       setUxError(mapSignError(err))
       console.error('Deal signing failed:', err)
+    }
+  }
+
+  const handleTradeAction = async (
+    action: 'mark_shipped' | 'mark_delivered' | 'mark_completed',
+  ) => {
+    setTradeActionError(null)
+    setSuccessMessage(null)
+
+    try {
+      await applyTradeAction.mutateAsync({
+        dealId: data.deal_id,
+        body: {
+          action,
+          tracking_reference:
+            action === 'mark_shipped' ? trackingReference.trim() || null : null,
+        },
+      })
+      if (action === 'mark_shipped') {
+        setTrackingReference('')
+        setSuccessMessage('Spedizione registrata.')
+      } else if (action === 'mark_delivered') {
+        setSuccessMessage('Consegna confermata.')
+      } else {
+        setSuccessMessage('Trade completato.')
+      }
+    } catch (err) {
+      setTradeActionError(mapTradeActionError(err))
     }
   }
 
@@ -294,9 +407,12 @@ export default function DealDetailPage() {
           <TimelineItem label="Accordo negoziato" state="done" />
           <TimelineItem label="Seller signed" state={data.seller_signed_at ? 'done' : 'pending'} />
           <TimelineItem label="Buyer signed" state={data.buyer_signed_at ? 'done' : 'pending'} />
-          <TimelineItem label="Deal confirmed" state={isConfirmed ? 'done' : 'pending'} />
-          <TimelineItem label="Trade Window" state={isConfirmed ? 'current' : 'pending'} />
-          <TimelineItem label="Completed" state="pending" />
+          <TimelineItem label="Deal confirmed" state={isTradeUnlocked ? 'done' : 'pending'} />
+          <TimelineItem
+            label="Trade Window"
+            state={isCompleted ? 'done' : isTradeUnlocked ? 'current' : 'pending'}
+          />
+          <TimelineItem label="Completed" state={isCompleted ? 'done' : 'pending'} />
         </ol>
       </section>
 
@@ -327,23 +443,25 @@ export default function DealDetailPage() {
           <div>
             <h2 className="text-lg font-semibold text-gray-950">Trade Window</h2>
             <p className="mt-1 text-sm text-gray-600">
-              {isConfirmed
+              {isTradeUnlocked
                 ? 'Finestra operativa aperta per coordinare consegna e completamento.'
                 : 'Si apre dopo la doppia firma passkey.'}
             </p>
           </div>
           <span
             className={`w-fit rounded-full border px-2.5 py-1 text-xs font-medium ${
-              isConfirmed
-                ? 'border-blue-200 bg-blue-50 text-blue-700'
+              isCompleted
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : isTradeUnlocked
+                  ? 'border-blue-200 bg-blue-50 text-blue-700'
                 : 'border-gray-200 bg-gray-100 text-gray-700'
             }`}
           >
-            {isConfirmed ? 'Attiva' : 'Bloccata'}
+            {isCompleted ? 'Completata' : isTradeUnlocked ? 'Attiva' : 'Bloccata'}
           </span>
         </div>
 
-        {!isConfirmed ? (
+        {!isTradeUnlocked ? (
           <p className="mt-5 text-sm text-gray-600">
             Prima servono le firme di compratore e venditore.
           </p>
@@ -386,22 +504,101 @@ export default function DealDetailPage() {
                   {nextActionLabel(tradeWindow.data.next_required_action)}
                 </dd>
               </div>
+              <div>
+                <dt className="text-gray-500">Stato logistico</dt>
+                <dd className="mt-1 font-semibold text-gray-950">
+                  {shippingStatusLabel(tradeWindow.data.shipping_status)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Tracking</dt>
+                <dd className="mt-1 font-semibold text-gray-950">
+                  {tradeWindow.data.tracking_reference ?? 'Non inserito'}
+                </dd>
+              </div>
             </dl>
 
-            <div className="grid gap-3 text-sm sm:grid-cols-3">
-              <div className="border-l border-blue-200 pl-4">
-                <p className="font-semibold text-blue-700">Shipping pending</p>
-                <p className="mt-1 text-gray-600">Stato iniziale Trade Window.</p>
-              </div>
-              <div className="border-l border-gray-200 pl-4">
-                <p className="font-semibold text-gray-500">Shipped</p>
-                <p className="mt-1 text-gray-600">Placeholder logistico.</p>
-              </div>
-              <div className="border-l border-gray-200 pl-4">
-                <p className="font-semibold text-gray-500">Completed</p>
-                <p className="mt-1 text-gray-600">Chiusura futura del deal.</p>
-              </div>
+            <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <TradeWindowStep
+                label="Shipping pending"
+                detail="Venditore in preparazione."
+                state={tradeStepState(shippingStatus, 'shipping_pending')}
+              />
+              <TradeWindowStep
+                label="Shipped"
+                detail={
+                  tradeWindow.data.shipped_at
+                    ? formatDateTime(tradeWindow.data.shipped_at)
+                    : 'Non ancora spedito.'
+                }
+                state={tradeStepState(shippingStatus, 'shipped')}
+              />
+              <TradeWindowStep
+                label="Delivered"
+                detail={
+                  tradeWindow.data.delivered_at
+                    ? formatDateTime(tradeWindow.data.delivered_at)
+                    : 'Consegna da confermare.'
+                }
+                state={tradeStepState(shippingStatus, 'delivered')}
+              />
+              <TradeWindowStep
+                label="Completed"
+                detail={
+                  tradeWindow.data.completed_at
+                    ? formatDateTime(tradeWindow.data.completed_at)
+                    : 'Chiusura in attesa.'
+                }
+                state={tradeStepState(shippingStatus, 'completed')}
+              />
             </div>
+
+            {(canMarkShipped || canMarkDelivered || canCompleteTrade || tradeActionError) && (
+              <div className="space-y-3 border-t border-gray-100 pt-4">
+                {canMarkShipped && (
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={trackingReference}
+                      onChange={(event) => setTrackingReference(event.target.value)}
+                      className="min-h-11 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                      maxLength={120}
+                      placeholder="Tracking opzionale"
+                    />
+                    <button
+                      onClick={() => void handleTradeAction('mark_shipped')}
+                      disabled={tradeActionBusy}
+                      className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {tradeActionBusy ? 'Aggiornamento...' : 'Segna spedito'}
+                    </button>
+                  </div>
+                )}
+
+                {canMarkDelivered && (
+                  <button
+                    onClick={() => void handleTradeAction('mark_delivered')}
+                    disabled={tradeActionBusy}
+                    className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {tradeActionBusy ? 'Aggiornamento...' : 'Conferma consegna'}
+                  </button>
+                )}
+
+                {canCompleteTrade && (
+                  <button
+                    onClick={() => void handleTradeAction('mark_completed')}
+                    disabled={tradeActionBusy}
+                    className="rounded-lg bg-gray-950 px-5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  >
+                    {tradeActionBusy ? 'Aggiornamento...' : 'Completa trade'}
+                  </button>
+                )}
+
+                {tradeActionError && (
+                  <p className="text-sm font-semibold text-red-700">{tradeActionError}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -411,23 +608,23 @@ export default function DealDetailPage() {
           <div>
             <h2 className="text-lg font-semibold text-gray-950">Chat post-deal</h2>
             <p className="mt-1 text-sm text-gray-600">
-              {data.status === 'confirmed'
+              {isTradeUnlocked
                 ? 'Canale sbloccato dopo la doppia firma.'
                 : 'Si sblocca solo quando compratore e venditore hanno firmato.'}
             </p>
           </div>
           <span
             className={`w-fit rounded-full border px-2.5 py-1 text-xs font-medium ${
-              data.status === 'confirmed'
+              isTradeUnlocked
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-gray-200 bg-gray-100 text-gray-700'
             }`}
           >
-            {data.status === 'confirmed' ? 'Sbloccata' : 'Bloccata'}
+            {isTradeUnlocked ? 'Sbloccata' : 'Bloccata'}
           </span>
         </div>
 
-        {data.status === 'confirmed' && (
+        {isTradeUnlocked && (
           <div className="mt-5 space-y-4">
             <div className="space-y-3">
               {messages.isLoading ? (

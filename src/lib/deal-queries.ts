@@ -8,6 +8,7 @@ import {
   type DealSendMessageRequest,
   type DealSignSubmitRequest,
   type DealSignSubmitResponse,
+  type DealTradeWindowActionRequest,
   type DealTradeWindowResponse,
 } from './api-client'
 
@@ -66,6 +67,25 @@ export function useDealTradeWindow(id: string, enabled: boolean) {
     queryKey: DEAL_TRADE_WINDOW_QUERY_KEY(id),
     queryFn: () => api.dealTradeWindow(id),
     enabled: Boolean(id) && enabled,
+  })
+}
+
+export function useApplyTradeWindowAction() {
+  const queryClient = useQueryClient()
+
+  return useMutation<
+    DealTradeWindowResponse,
+    Error,
+    { dealId: string; body: DealTradeWindowActionRequest }
+  >({
+    mutationFn: ({ dealId, body }) => api.dealTradeWindowAction(dealId, body),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: DEAL_TRADE_WINDOW_QUERY_KEY(variables.dealId),
+      })
+      void queryClient.invalidateQueries({ queryKey: DEAL_DETAIL_QUERY_KEY(variables.dealId) })
+      void queryClient.invalidateQueries({ queryKey: ['deals', 'list'] })
+    },
   })
 }
 

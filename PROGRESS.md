@@ -1055,3 +1055,44 @@ Risultati:
 - TypeScript verde.
 - Lint verde.
 - `git diff --check` verde.
+
+---
+
+## FASE 10.1.4.4 — Trade Window actions — 2026-05-07
+
+### Frontend
+
+- Aggiunto client typed per:
+  - `POST /api/deals/{deal_id}/trade-window/action`
+- Aggiunto hook `useApplyTradeWindowAction`.
+- `/deals/[id]` ora mantiene Trade Window e chat attive per deal
+  `confirmed` e `completed`.
+- Il pannello Trade Window mostra:
+  - stato logistico;
+  - tracking placeholder;
+  - timestamp `shipped_at`, `delivered_at`, `completed_at`;
+  - timeline shipping pending → shipped → delivered → completed.
+- Controlli contestuali:
+  - seller: `Segna spedito` con tracking opzionale;
+  - buyer: `Conferma consegna`;
+  - entrambe le parti: `Completa trade` dopo delivery.
+- Errori API mappati per ruolo non valido, transizione non valida e Trade
+  Window ancora bloccata.
+
+### Verifica
+
+```bash
+npx openapi-typescript /tmp/vifaras_openapi.json -o src/lib/api-types.ts
+npx tsc --noEmit
+npm run lint
+npm run build
+git diff --check
+```
+
+Risultati:
+
+- Tipi OpenAPI rigenerati localmente da schema FastAPI.
+- TypeScript verde.
+- Lint verde.
+- Build verde.
+- `git diff --check` verde.

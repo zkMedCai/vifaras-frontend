@@ -167,6 +167,10 @@ export type DealSignDraftResponse = JsonResponse<'/api/deals/{deal_id}/sign/draf
 export type DealSignSubmitRequest = JsonRequest<'/api/deals/{deal_id}/sign/submit', 'post'>
 export type DealSignSubmitResponse = JsonResponse<'/api/deals/{deal_id}/sign/submit', 'post'>
 export type DealTradeWindowResponse = JsonResponse<'/api/deals/{deal_id}/trade-window', 'get'>
+export type DealTradeWindowActionRequest = JsonRequest<
+  '/api/deals/{deal_id}/trade-window/action',
+  'post'
+>
 export type DealMessageListResponse = JsonResponse<'/api/deals/{deal_id}/messages', 'get'>
 export type DealSendMessageRequest = JsonRequest<'/api/deals/{deal_id}/messages', 'post'>
 export type DealMessageItem = paths['/api/deals/{deal_id}/messages']['post'] extends {
@@ -320,6 +324,12 @@ export const api = {
 
   dealTradeWindow: (id: string) =>
     request<DealTradeWindowResponse>(`/api/deals/${id}/trade-window`),
+
+  dealTradeWindowAction: (id: string, body: DealTradeWindowActionRequest) =>
+    request<DealTradeWindowResponse>(`/api/deals/${id}/trade-window/action`, {
+      method: 'POST',
+      body,
+    }),
 
   dealSignDraft: (id: string) =>
     request<DealSignDraftResponse>(`/api/deals/${id}/sign/draft`, {
