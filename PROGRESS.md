@@ -834,6 +834,44 @@ Risultati:
 
 ---
 
+## FASE 10.2 — Chat-to-Capital-Mandate UI — 2026-05-24
+
+### Frontend
+
+- Aggiunto client typed per:
+  - `POST /api/capital-mandates/draft-from-text`
+- Aggiunto hook `useCreateCapitalMandateDraftFromText`.
+- `/capital-mandate` ora presenta prima il percorso chat:
+  - textarea con istruzione naturale;
+  - generazione review mandato via Anthropic/backend;
+  - applicazione automatica dei campi estratti al form di dettaglio;
+  - riepilogo/confidenza della bozza;
+  - firma passkey invariata tramite `/api/capital-mandates/submit`.
+- Il form manuale resta sotto come fallback/editor dei dettagli prima della
+  firma.
+- Errori chat mappati per campi critici mancanti, costo AI, provider e parse.
+
+### Verifica
+
+```bash
+npm run api:types
+npx prettier --write src/lib/api-client.ts src/lib/capital-mandate-queries.ts 'src/app/(app)/capital-mandate/page.tsx'
+npm run lint
+npx tsc --noEmit
+git diff --check
+curl -i http://localhost:3000/capital-mandate
+```
+
+Risultati:
+
+- Tipi OpenAPI gia allineati al backend locale.
+- Lint verde.
+- TypeScript verde.
+- `git diff --check` verde.
+- `/capital-mandate` risponde `200 OK` dal dev server Next.
+
+---
+
 ## FASE 10.1.5 — Capital Mandate UI — 2026-05-07
 
 ### Frontend

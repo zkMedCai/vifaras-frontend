@@ -147,10 +147,21 @@ export type MandateSubmitResponse = JsonResponse<'/api/mandates/submit', 'post'>
 
 export type CapitalMandateDraftRequest = JsonRequest<'/api/capital-mandates/draft', 'post'>
 export type CapitalMandateDraftResponse = JsonResponse<'/api/capital-mandates/draft', 'post'>
+export type CapitalMandateDraftFromTextRequest = JsonRequest<
+  '/api/capital-mandates/draft-from-text',
+  'post'
+>
+export type CapitalMandateDraftFromTextResponse = JsonResponse<
+  '/api/capital-mandates/draft-from-text',
+  'post'
+>
 export type CapitalMandateSubmitRequest = JsonRequest<'/api/capital-mandates/submit', 'post'>
 export type CapitalMandateSubmitResponse = JsonResponse<'/api/capital-mandates/submit', 'post'>
 export type ActiveCapitalMandateResponse = JsonResponse<'/api/capital-mandates/active', 'get'>
-export type CapitalMandateResponse = JsonResponse<'/api/capital-mandates/{capital_mandate_id}', 'get'>
+export type CapitalMandateResponse = JsonResponse<
+  '/api/capital-mandates/{capital_mandate_id}',
+  'get'
+>
 export type CapitalMandateLedgerResponse = JsonResponse<
   '/api/capital-mandates/{capital_mandate_id}/ledger',
   'get'
@@ -269,17 +280,21 @@ export const api = {
       body,
     }),
 
+  createCapitalMandateDraftFromText: (body: CapitalMandateDraftFromTextRequest) =>
+    request<CapitalMandateDraftFromTextResponse>('/api/capital-mandates/draft-from-text', {
+      method: 'POST',
+      body,
+    }),
+
   submitCapitalMandate: (body: CapitalMandateSubmitRequest) =>
     request<CapitalMandateSubmitResponse>('/api/capital-mandates/submit', {
       method: 'POST',
       body,
     }),
 
-  activeCapitalMandate: () =>
-    request<ActiveCapitalMandateResponse>('/api/capital-mandates/active'),
+  activeCapitalMandate: () => request<ActiveCapitalMandateResponse>('/api/capital-mandates/active'),
 
-  capitalMandateGet: (id: string) =>
-    request<CapitalMandateResponse>(`/api/capital-mandates/${id}`),
+  capitalMandateGet: (id: string) => request<CapitalMandateResponse>(`/api/capital-mandates/${id}`),
 
   capitalMandatePause: (id: string) =>
     request<CapitalMandateResponse>(`/api/capital-mandates/${id}/pause`, {

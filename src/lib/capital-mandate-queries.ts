@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   api,
   type ActiveCapitalMandateResponse,
+  type CapitalMandateDraftFromTextRequest,
+  type CapitalMandateDraftFromTextResponse,
   type CapitalMandateDraftRequest,
   type CapitalMandateDraftResponse,
   type CapitalMandateLedgerResponse,
@@ -29,6 +31,16 @@ export function useActiveCapitalMandate() {
 export function useCreateCapitalMandateDraft() {
   return useMutation<CapitalMandateDraftResponse, Error, CapitalMandateDraftRequest>({
     mutationFn: (body) => api.createCapitalMandateDraft(body),
+  })
+}
+
+export function useCreateCapitalMandateDraftFromText() {
+  return useMutation<
+    CapitalMandateDraftFromTextResponse,
+    Error,
+    CapitalMandateDraftFromTextRequest
+  >({
+    mutationFn: (body) => api.createCapitalMandateDraftFromText(body),
   })
 }
 
